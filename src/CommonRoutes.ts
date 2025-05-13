@@ -4,7 +4,7 @@ import log4js, {Logger} from "log4js";
 
 export default abstract class CommonRoutes {
 
-    readonly router: any;
+    readonly router: Router;
     protected helper: CommonRouterHelper;
     protected logger: Logger;
     protected constructor(helper: CommonRouterHelper, checkUser: boolean = true) {
@@ -13,7 +13,7 @@ export default abstract class CommonRoutes {
         this.logger = log4js.getLogger(this.constructor.name);
         if (checkUser) {
             this.logger.debug('检查用户是否登录')
-            this.router.all('/', helper.checkLoggedUser());
+            this.router.use(helper.checkLoggedUser());
         }
     }
 
