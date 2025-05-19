@@ -1,23 +1,17 @@
 export interface CommonUser {
     /**
-     *
-     */
-    id: string;
-    /**
      *  编码
      */
-    code: string;
+    accountCode: string;
     /**
      * 姓名
      */
     name: string;
+
     /**
-     * 部门
+     * 其他的属性
      */
-    dept: {
-        id: string;
-        name: string;
-    },
+    [key: string]: any;
     /**
      * 租户
      */

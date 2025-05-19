@@ -1,13 +1,13 @@
 {
-  "name": "@ticatec/common-express-server",
-  "version": "0.0.7",
+  "name": "@aoss/common-express-server",
+  "version": "0.0.13",
   "description": "A set of common classes for node express apps.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rm -rf ./lib && tsc",
-    "publish-public": "npm publish --access public"
+    "publish-public": "npm run build && npm publish"
   },
   "keywords": [
     "ticatec",
@@ -31,11 +31,11 @@
   },
   "dependencies": {
     "@ticatec/bean-validator": "^0.0.1",
-    "@ticatec/express-exception": "^1.1.1",
-    "express": "^5.1.0"
+    "@ticatec/express-exception": "^1.1.2"
   },
   "peerDependencies": {
     "express": "^5.1.0",
-    "log4js": "^6.7.0"
+    "log4js": "^6.7.0",
+    "@ticatec/node-common-library": "^2.0.27"
   }
 }

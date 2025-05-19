@@ -82,8 +82,7 @@ export default class CommonRouterHelper {
         }
     }
 
-
-    protected retrieveUser(req: Request) {
+    protected retrieveUserFormHeader(req: Request) {
         let userStr: string = req.headers['user'] as string;
         if (userStr != null) {
             try {
@@ -93,11 +92,17 @@ export default class CommonRouterHelper {
             }
         }
     }
+    retrieveUser() {
+        return (req: Request, res: Response, next:any) => {
+            this.retrieveUserFormHeader(req);
+            next();
+        }
+    }
 
 
     checkLoggedUser() {
         return (req: Request, res: Response, next:any) => {
-            this.retrieveUser(req);
+            this.retrieveUserFormHeader(req);
             if (req['user'] == null) {
                 handleError(new UnauthenticatedError(), req, res);
             } else {
