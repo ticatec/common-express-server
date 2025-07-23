@@ -1,6 +1,6 @@
 {
   "name": "@aoss/common-express-server",
-  "version": "0.0.15",
+  "version": "0.1.0",
   "description": "A set of common classes for node express apps.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -30,7 +30,7 @@
     "@types/node": "^22.8.6"
   },
   "dependencies": {
-    "@ticatec/bean-validator": "^0.0.1",
+    "@ticatec/bean-validator": "^0.0.3",
     "@ticatec/express-exception": "^1.1.2"
   },
   "peerDependencies": {

@@ -12,15 +12,6 @@ export default abstract class TenantBaseController<T> extends CommonController<T
     }
 
     /**
-     * 获取当前登录用户，如果有扮演，获取扮演用户
-     * @param req
-     */
-    protected getLoggedUser = (req) => {
-        let user = req.user;
-        return user.actAs || user;
-    }
-
-    /**
      * 获取新增接口的参数，第一个参数为登录用户，第二个参数为请求数据
      * @param req
      * @protected

@@ -86,7 +86,15 @@ export default class CommonRouterHelper {
         let userStr: string = req.headers['user'] as string;
         if (userStr != null) {
             try {
-                req['user'] = JSON.parse(decodeURIComponent(userStr));
+                const user = JSON.parse(decodeURIComponent(userStr));
+                let language =req.headers['x-language'];
+                if (language) {
+                    if (user.actAs) {
+                        user.actAs['language'] = language
+                    }
+                    user['language'] = language
+                }
+                req['user'] = user;
             } catch (ex) {
                 this.logger.debug('无效的user头', userStr);
             }
