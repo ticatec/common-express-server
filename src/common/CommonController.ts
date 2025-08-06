@@ -1,76 +1,93 @@
 
-import {ActionNotFoundError, AppError, IllegalParameterError} from "@ticatec/express-exception";
+import {ActionNotFoundError, IllegalParameterError} from "@ticatec/express-exception";
 import BaseController from "./BaseController";
 import beanValidator, {ValidationRules} from "@ticatec/bean-validator";
 import {RestfulFunction} from "../CommonRouterHelper";
+import {Request} from "express";
 
 /**
- * 实现了增/删/改的控制类
+ * Controller class that implements Create/Read/Update/Delete operations
+ * @template T The service type this controller depends on
  */
 export default abstract class CommonController<T> extends BaseController<T> {
 
     /**
-     * 实体检验规则
+     * Entity validation rules
      * @protected
      */
     protected readonly rules: ValidationRules;
 
+    /**
+     * Constructor for common controller
+     * @param service The service instance to inject
+     * @param rules Validation rules for entities (optional)
+     * @protected
+     */
     protected constructor(service: T, rules: ValidationRules = null) {
         super(service);
         this.rules = rules;
     }
 
     /**
-     * 验证实体
-     * @param data
+     * Validates entity data
+     * @param data The data to validate
      * @protected
      */
     protected validateEntity(data: any) {
         let result = beanValidator.validate(data, this.rules);
         if (!result.valid) {
-            BaseController.debugEnabled && this.logger.debug(`invalid data: ${result.errorMessage}`);
+            BaseController.debugEnabled && this.logger.debug(`Invalid data: ${result.errorMessage}`);
             throw new IllegalParameterError(result.errorMessage);
         }
     }
 
     /**
-     * 新增实体接口
+     * Creates new entity endpoint
+     * @returns RESTful function for creating new entities
      */
     createNew(): RestfulFunction {
-        return async (req: any): Promise<any> => {
+        return async (req: Request): Promise<any> => {
             return this._createNew(req);
         }
     }
 
     /**
-     * 更新实体接口
+     * Updates entity endpoint
+     * @returns RESTful function for updating entities
      */
     update(): RestfulFunction {
-        return async (req: any): Promise<any> => {
+        return async (req: Request): Promise<any> => {
             return this._update(req);
         }
     }
 
     /**
-     * 删除实体接口
+     * Deletes entity endpoint
+     * @returns RESTful function for deleting entities
      */
     del(): RestfulFunction {
-        return async (req: any): Promise<any> => {
+        return async (req: Request): Promise<any> => {
             return this._del(req);
         }
     }
 
+    /**
+     * Checks if a service interface method exists
+     * @param name The method name to check
+     * @protected
+     */
     protected checkInterface(name: string):void {
         if (this.service[name] == null) {
-            this.logger.warn(`当前服务没有新增接口:${name}`);
-            throw new ActionNotFoundError(`当前服务没有新增接口:${name}`);
+            this.logger.warn(`Current service does not have interface: ${name}`);
+            throw new ActionNotFoundError(`Current service does not have interface: ${name}`);
         }
     }
 
     /**
-     * 根据名称调用服务接口
-     * @param name
-     * @param args
+     * Invokes service interface by name
+     * @param name The method name to invoke
+     * @param args Arguments to pass to the method
+     * @returns Promise resolving to the method result
      * @protected
      */
     protected async invokeServiceInterface(name: string, args: Array<any> = []): Promise<any> {
@@ -78,53 +95,60 @@ export default abstract class CommonController<T> extends BaseController<T> {
     }
 
     /**
-     * 新建实体
-     * @param req
+     * Creates a new entity
+     * @param req Express request object
+     * @returns Promise resolving to the created entity
      * @protected
      */
-    protected _createNew(req: any): Promise<any> {
+    protected _createNew(req: Request): Promise<any> {
         let data:any = req.body;
-        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} 申请创建一个实体`, data);
+        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to create an entity`, data);
         this.checkInterface('createNew');
         this.validateEntity(data);
         return this.invokeServiceInterface('createNew', this.getCreateNewArguments(req));
     }
 
     /**
-     * 更新实体
-     * @param req
+     * Updates an entity
+     * @param req Express request object
+     * @returns Promise resolving to the updated entity
      * @protected
      */
-    protected _update(req: any): Promise<any> {
+    protected _update(req: Request): Promise<any> {
         let data:any = req.body;
-        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} 申请更新一个实体,`, data);
+        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to update an entity`, data);
         this.checkInterface('update');
         this.validateEntity(data);
         return this.invokeServiceInterface('update', this.getUpdateArguments(req));
     }
 
     /**
-     * 删除实体
-     * @param req
+     * Deletes an entity
+     * @param req Express request object
+     * @returns Promise resolving when entity is deleted
      * @protected
      */
-    protected _del(req: any): Promise<any> {
-        //请在子类实现删除接口，否则会抛出系统异常
-        this.logger.warn('当前服务没有删除接口');
-        throw new ActionNotFoundError('当前服务没有删除接口');
+    protected _del(req: Request): Promise<any> {
+        // Please implement delete interface in subclass, otherwise system exception will be thrown
+        this.logger.warn('Current service does not have delete interface');
+        throw new ActionNotFoundError('Current service does not have delete interface');
     }
 
     /**
-     * 新增实体的参数
-     * @param req
+     * Gets arguments for creating new entity
+     * @param req Express request object
+     * @returns Array of arguments to pass to service create method
      * @protected
+     * @abstract
      */
-    protected abstract getCreateNewArguments(req: any):Array<any>;
+    protected abstract getCreateNewArguments(req: Request):Array<any>;
 
     /**
-     * 更新实体的参数
-     * @param req
+     * Gets arguments for updating entity
+     * @param req Express request object
+     * @returns Array of arguments to pass to service update method
      * @protected
+     * @abstract
      */
-    protected abstract getUpdateArguments(req: any):Array<any>;
+    protected abstract getUpdateArguments(req: Request):Array<any>;
 }

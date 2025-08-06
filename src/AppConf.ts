@@ -1,21 +1,36 @@
+/**
+ * Application configuration singleton class
+ */
 export default class AppConf {
 
+    /** Configuration object */
     private readonly conf: any;
+    /** Singleton instance */
     static instance: AppConf = null;
 
+    /**
+     * Private constructor for singleton pattern
+     * @param conf Configuration object
+     */
     private constructor(conf: any) {
         this.conf = conf;
     }
 
+    /**
+     * Gets the singleton instance
+     * @returns AppConf instance or null if not initialized
+     */
     static getInstance(): AppConf {
         return AppConf.instance;
     }
 
     /**
-     * 初始化配置表
+     * Initializes the configuration singleton
+     * @param config Configuration object
+     * @returns AppConf instance
      */
     static init(config: any): AppConf {
-        console.debug('初始化配置中心', config);
+        console.debug('Initializing configuration center', config);
         if (AppConf.instance == null) {
             AppConf.instance = new AppConf(config);
         }
@@ -23,8 +38,9 @@ export default class AppConf {
     }
 
     /**
-     * 获取配置值
-     * @param key
+     * Gets configuration value by key (supports dot notation)
+     * @param key Configuration key (can use dot notation like 'server.port')
+     * @returns Configuration value or undefined if not found
      */
     get(key: string): any {
         if (!key) return undefined;

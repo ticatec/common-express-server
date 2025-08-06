@@ -1,35 +1,45 @@
-import {Request, Response} from "express";
+import {NextFunction, Request, Response} from "express";
 import {ActionNotFoundError, handleError, UnauthenticatedError} from '@ticatec/express-exception';
 import log4js from "log4js";
 
 
-export type RestfulFunction = (req: any) => any;
-export type ControlFunction = (req: any, res: any) => any;
+/**
+ * Function signature for RESTful API handlers
+ */
+export type RestfulFunction = (req: Request) => any;
 
+/**
+ * Function signature for control handlers
+ */
+export type ControlFunction = (req: Request, res: Response) => any;
+
+/**
+ * Common router helper class providing middleware and utilities for Express routing
+ */
 export default class CommonRouterHelper {
 
-    protected readonly logger = log4js.getLogger("CommonRouterHelper");
+    /** Logger instance for this router helper */
+    protected readonly logger = log4js.getLogger(this.constructor.name);
 
     /**
-     * 设置Http Response的header为JSON格式
-     * @param req
-     * @param res
-     * @param next
+     * Sets HTTP response header to JSON format
+     * @param req Express request object
+     * @param res Express response object
+     * @param next Express next function
      */
-    setJsonHeader(req: Request, res: Response, next:any): void {
+    setJsonHeader(req: Request, res: Response, next: NextFunction): void {
         res.header('Content-Type', 'application/json');
         next();
     }
 
 
     /**
-     * 设置response不使用cache
-     * @param req
-     * @param res
-     * @param next
-     * @returns {Promise<void>}
+     * Sets response headers to disable caching
+     * @param req Express request object
+     * @param res Express response object
+     * @param next Express next function
      */
-    setNoCache(req: Request, res: Response, next:any): void {
+    setNoCache(req: Request, res: Response, next: NextFunction): void {
         res.header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
         res.header('Expires', '-1');
         res.header('Pragma', 'no-cache');
@@ -37,8 +47,9 @@ export default class CommonRouterHelper {
     }
 
     /**
-     * 调用一个restful的操作，将结果封装成json格式返回请求端
-     * @param func
+     * Invokes a RESTful operation and wraps the result in JSON format for the client
+     * @param func The RESTful function to execute
+     * @returns Express middleware function
      */
     invokeRestfulAction(func: RestfulFunction): any {
         return async (req: Request, res: Response): Promise<void> => {
@@ -56,8 +67,9 @@ export default class CommonRouterHelper {
     }
 
     /**
-     * 调用异步函数并处理返回的错误
-     * @param func
+     * Invokes an asynchronous controller function with error handling
+     * @param func The controller function to execute
+     * @returns Express middleware function
      */
     invokeController(func: ControlFunction) {
         return async (req: Request, res: Response): Promise<void> => {
@@ -69,25 +81,28 @@ export default class CommonRouterHelper {
         }
     }
 
-    /**
-     *
-     */
 
     /**
-     * 处理无效的请求路径
+     * Handles invalid request paths by throwing ActionNotFoundError
+     * @returns Express middleware function for handling 404 errors
      */
     actionNotFound() {
-        return (req:Request, res:Response, next:any) => {
+        return (req: Request, res: Response, next: NextFunction) => {
             handleError(new ActionNotFoundError(), req, res);
         }
     }
 
+    /**
+     * Retrieves user information from request headers
+     * @param req Express request object
+     * @protected
+     */
     protected retrieveUserFormHeader(req: Request) {
         let userStr: string = req.headers['user'] as string;
         if (userStr != null) {
             try {
                 const user = JSON.parse(decodeURIComponent(userStr));
-                let language =req.headers['x-language'];
+                let language = req.headers['x-language'];
                 if (language) {
                     if (user.actAs) {
                         user.actAs['language'] = language
@@ -96,20 +111,29 @@ export default class CommonRouterHelper {
                 }
                 req['user'] = user;
             } catch (ex) {
-                this.logger.debug('无效的user头', userStr);
+                this.logger.debug('Invalid user header', userStr);
             }
         }
     }
+
+    /**
+     * Middleware to retrieve user information from headers
+     * @returns Express middleware function
+     */
     retrieveUser() {
-        return (req: Request, res: Response, next:any) => {
+        return (req: Request, res: Response, next: any) => {
             this.retrieveUserFormHeader(req);
             next();
         }
     }
 
 
+    /**
+     * Middleware to check if user is authenticated
+     * @returns Express middleware function that validates user authentication
+     */
     checkLoggedUser() {
-        return (req: Request, res: Response, next:any) => {
+        return (req: Request, res: Response, next: any) => {
             this.retrieveUserFormHeader(req);
             if (req['user'] == null) {
                 handleError(new UnauthenticatedError(), req, res);

@@ -1,19 +1,22 @@
+/**
+ * Common user interface representing basic user information
+ */
 export interface CommonUser {
     /**
-     *  编码
+     * Account code
      */
     accountCode: string;
     /**
-     * 姓名
+     * User name
      */
     name: string;
 
     /**
-     * 其他的属性
+     * Additional properties
      */
     [key: string]: any;
     /**
-     * 租户
+     * Tenant information
      */
     tenant: {
         code: string,
@@ -22,12 +25,12 @@ export interface CommonUser {
 }
 
 /**
- * 当前登陆的用户
+ * Interface for currently logged in user
  */
 export default interface LoggedUser extends CommonUser {
 
     /**
-     * 扮演用户
+     * User being acted as (for user impersonation)
      */
     actAs?: CommonUser;
 }

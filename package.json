@@ -1,41 +1,81 @@
 {
-  "name": "@aoss/common-express-server",
-  "version": "0.1.0",
-  "description": "A set of common classes for node express apps.",
+  "name": "@ticatec/common-express-server",
+  "version": "0.1.1",
+  "description": "A comprehensive TypeScript library providing common classes, controllers, and middleware for building scalable Express.js applications with multi-tenant support.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rm -rf ./lib && tsc",
-    "publish-public": "npm run build && npm publish"
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf ./lib",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "echo \"No linting configured\"",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "publish-public": "npm run build && npm publish --access public"
   },
   "keywords": [
+    "express",
+    "typescript",
+    "nodejs",
+    "rest-api",
+    "middleware",
+    "controller",
+    "multi-tenant",
+    "authentication",
+    "routing",
+    "server",
+    "framework",
     "ticatec",
     "common",
-    "database",
     "utils"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/ticatec/common-express-server.git"
   },
-  "author": "Henry Feng",
+  "author": {
+    "name": "Henry Feng",
+    "email": "henry@ticatec.com"
+  },
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/ticatec/common-express-server/issues"
   },
-  "homepage": "https://github.com/ticatec/common-express-server",
-  "devDependencies": {
-    "@types/express": "^5.0.1",
-    "@types/node": "^22.8.6"
+  "homepage": "https://github.com/ticatec/common-express-server#readme",
+  "files": [
+    "lib/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@ticatec/bean-validator": "^0.0.3",
-    "@ticatec/express-exception": "^1.1.2"
+    "@ticatec/bean-validator": "^0.0.6",
+    "@ticatec/express-exception": "^1.1.3",
+    "@ticatec/node-common-library": "^2.2.0",
+    "log4js": "^6.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.8.6",
+    "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "express": "^5.1.0",
-    "log4js": "^6.7.0",
-    "@ticatec/node-common-library": "^2.0.27"
+    "express": "^5.1.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": false
+    }
   }
 }
