@@ -5,6 +5,8 @@
 
 A comprehensive TypeScript library providing common classes, controllers, and middleware for building scalable Express.js applications with multi-tenant support.
 
+[中文](./README_CN.md) ｜ English
+
 ## Features
 
 - 🚀 **Express.js Foundation**: Built on Express.js 5.x with full TypeScript support

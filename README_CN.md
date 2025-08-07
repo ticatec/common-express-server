@@ -5,7 +5,8 @@
 
 一个全面的 TypeScript 库，提供通用类、控制器和中间件，用于构建具有多租户支持的可扩展 Express.js 应用程序。
 
-[English](./README.md) | 中文
+[English](./README.md) ｜ 中文
+
 
 ## 特性
 
