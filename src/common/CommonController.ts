@@ -94,6 +94,14 @@ export default abstract class CommonController<T> extends BaseController<T> {
         return await this.service[name](...args);
     }
 
+    protected buildNewEntry(req: Request): any {
+        return req.body;
+    }
+
+    protected buildUpdatedEntry(req: Request): any {
+        return req.body;
+    }
+
     /**
      * Creates a new entity
      * @param req Express request object
@@ -101,7 +109,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _createNew(req: Request): Promise<any> {
-        let data:any = req.body;
+        let data:any = this.buildNewEntry(req);
         BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to create an entity`, data);
         this.checkInterface('createNew');
         this.validateEntity(data);
@@ -115,7 +123,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _update(req: Request): Promise<any> {
-        let data:any = req.body;
+        let data:any = this.buildUpdatedEntry(req);
         BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to update an entity`, data);
         this.checkInterface('update');
         this.validateEntity(data);

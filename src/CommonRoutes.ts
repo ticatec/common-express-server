@@ -1,6 +1,25 @@
-import {Express, Router} from "express";
+import {Express, Router, Request, Response} from "express";
 import CommonRouterHelper from "./CommonRouterHelper";
 import log4js, {Logger} from "log4js";
+import {NextFunction} from "express-serve-static-core";
+import {UnauthenticatedError} from "@ticatec/express-exception";
+
+/**
+ * 当前用户检查
+ */
+export type UserChecker = (req: Request) => boolean;
+
+/**
+ * 自定义校验
+ * @param checker
+ */
+const customCheck = (checker: UserChecker) => (req: Request, res: Response, next: NextFunction) => {
+    if (checker(req)) {
+        next();
+    } else {
+        throw new UnauthenticatedError()
+    }
+}
 
 /**
  * Abstract base class for defining common routes
@@ -18,15 +37,20 @@ export default abstract class CommonRoutes<T extends CommonRouterHelper> {
      * Constructor for common routes
      * @param helper Router helper instance
      * @param checkUser Whether to check user authentication (default: true)
+     * @param mergeParams Whether to merge params (default: false)
      * @protected
      */
-    protected constructor(helper: T, checkUser: boolean = true) {
-        this.router = Router();
+    protected constructor(helper: T, checkUser: boolean | UserChecker = true, mergeParams: boolean = false) {
+        this.router = Router({ mergeParams });
         this.helper = helper;
         this.logger = log4js.getLogger(this.constructor.name);
-        if (checkUser) {
-            this.logger.debug('Checking if user is logged in')
-            this.router.use(helper.checkLoggedUser());
+        if (typeof checkUser == "boolean") {
+            if (checkUser) {
+                this.logger.debug('Checking if user is logged in')
+                this.router.use(helper.checkLoggedUser());
+            }
+        } else if (typeof checkUser == "function") {
+            this.router.use(customCheck(checkUser))
         }
     }
 

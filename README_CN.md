@@ -102,6 +102,58 @@ class UserRoutes extends CommonRoutes<CommonRouterHelper> {
 export default UserRoutes;
 ```
 
+#### 自定义用户认证
+
+你可以向 `CommonRoutes` 构造函数提供自定义的用户验证函数：
+
+```typescript
+import { CommonRoutes, CommonRouterHelper, UserChecker } from '@ticatec/common-express-server';
+
+// 自定义用户检查函数
+const customUserChecker: UserChecker = (req: Request): boolean => {
+    // 你的自定义认证逻辑
+    const userRole = req.headers['user-role'];
+    return userRole === 'admin' || userRole === 'moderator';
+};
+
+class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
+    constructor(helper: CommonRouterHelper) {
+        // 使用自定义用户检查器而不是默认的
+        super(helper, customUserChecker);
+        this.setupRoutes();
+    }
+
+    private setupRoutes() {
+        this.router.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+    }
+
+    private getDashboard = async (req: Request) => {
+        return { message: '管理员仪表板' };
+    };
+}
+
+// 完全跳过认证
+class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
+    constructor(helper: CommonRouterHelper) {
+        super(helper, false); // 不进行认证检查
+        this.setupRoutes();
+    }
+
+    private setupRoutes() {
+        this.router.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+    }
+
+    private getInfo = async (req: Request) => {
+        return { message: '公开信息' };
+    };
+}
+```
+
+`checkUser` 参数接受三种类型：
+- `true`（默认）: 使用默认的 `helper.checkLoggedUser()` 中间件
+- `false`: 完全跳过用户认证
+- `UserChecker` 函数: 自定义函数 `(req: Request) => boolean`，认证通过时返回 true
+
 ### 3. 创建控制器
 
 ```typescript

@@ -101,6 +101,58 @@ class UserRoutes extends CommonRoutes<CommonRouterHelper> {
 export default UserRoutes;
 ```
 
+#### Custom User Authentication
+
+You can provide a custom user verification function to the `CommonRoutes` constructor:
+
+```typescript
+import { CommonRoutes, CommonRouterHelper, UserChecker } from '@ticatec/common-express-server';
+
+// Custom user checker function
+const customUserChecker: UserChecker = (req: Request): boolean => {
+    // Your custom authentication logic
+    const userRole = req.headers['user-role'];
+    return userRole === 'admin' || userRole === 'moderator';
+};
+
+class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
+    constructor(helper: CommonRouterHelper) {
+        // Use custom user checker instead of default
+        super(helper, customUserChecker);
+        this.setupRoutes();
+    }
+
+    private setupRoutes() {
+        this.router.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+    }
+
+    private getDashboard = async (req: Request) => {
+        return { message: 'Admin dashboard' };
+    };
+}
+
+// Skip authentication entirely
+class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
+    constructor(helper: CommonRouterHelper) {
+        super(helper, false); // No authentication check
+        this.setupRoutes();
+    }
+
+    private setupRoutes() {
+        this.router.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+    }
+
+    private getInfo = async (req: Request) => {
+        return { message: 'Public information' };
+    };
+}
+```
+
+The `checkUser` parameter accepts three types:
+- `true` (default): Uses the default `helper.checkLoggedUser()` middleware
+- `false`: Skips user authentication entirely
+- `UserChecker` function: A custom function `(req: Request) => boolean` that returns true if authenticated
+
 ### 3. Create Controllers
 
 ```typescript

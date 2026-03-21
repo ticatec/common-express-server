@@ -74,8 +74,8 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
     async startup() {
         await this.loadConfigFile();
         try {
-            this.helper = this.getHelper();
             await this.beforeStart();
+            this.helper = this.getHelper();
             let webConf = this.getWebConf();
             this.writeCheckFile(webConf.port);
             this.contextRoot = webConf.contextRoot;
