@@ -6,6 +6,7 @@ export interface CommonUser {
      * Account code
      */
     accountCode: string;
+
     /**
      * User name
      */
@@ -15,10 +16,11 @@ export interface CommonUser {
      * Additional properties
      */
     [key: string]: any;
+
     /**
-     * Tenant information
+     * Tenant information (optional, may not be present for platform admins)
      */
-    tenant: {
+    tenant?: {
         code: string,
         name: string,
     }
@@ -28,6 +30,11 @@ export interface CommonUser {
  * Interface for currently logged in user
  */
 export default interface LoggedUser extends CommonUser {
+
+    /**
+     * Whether the user is a platform administrator
+     */
+    isPlatform?: boolean;
 
     /**
      * User being acted as (for user impersonation)

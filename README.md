@@ -19,6 +19,10 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 - 📊 **Logging**: Structured logging with log4js integration
 - 🎨 **TypeScript First**: Full TypeScript support with comprehensive type definitions
 
+## Documentation
+
+- **[Controller Guide](./CONTROLLER.md)** - Comprehensive guide on using controllers for CRUD and search operations
+
 ## Installation
 
 ```bash
@@ -71,20 +75,46 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
+#### Extending User Processing
+
+You can extend `CommonRouterHelper` to add custom processing for logged users:
+
+```typescript
+import { CommonRouterHelper } from '@ticatec/common-express-server';
+import LoggedUser from '@ticatec/common-express-server/LoggedUser';
+
+class CustomRouterHelper extends CommonRouterHelper {
+    /**
+     * Override to add custom user processing
+     */
+    protected async handleLoggedUser(user: LoggedUser): Promise<LoggedUser> {
+        // Load additional user data from database
+        const userData = await this.database.getUserById(user.accountCode);
+
+        // Add custom permissions
+        const permissions = await this.database.getUserPermissions(user.accountCode);
+
+        // Enrich user object
+        return {
+            ...user,
+            profile: userData.profile,
+            permissions: permissions,
+            lastLogin: userData.lastLogin
+        };
+    }
+}
+```
+
 ### 2. Create Routes
 
 ```typescript
-import { CommonRoutes, CommonRouterHelper } from '@ticatec/common-express-server';
+import { CommonRouter, CommonRouterHelper } from '@ticatec/common-express-server';
 
-class UserRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        super(helper); // checkUser = true by default
-        this.setupRoutes();
-    }
+class UserRoutes extends CommonRouter<CommonRouterHelper> {
 
-    private setupRoutes() {
-        this.router.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
-        this.router.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
+    protected bindRoutes() {
+        this.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
+        this.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -103,27 +133,24 @@ export default UserRoutes;
 
 #### Custom User Authentication
 
-You can provide a custom user verification function to the `CommonRoutes` constructor:
+You can override the `getGlobalHandler()` method to provide custom authentication:
 
 ```typescript
-import { CommonRoutes, CommonRouterHelper, UserChecker } from '@ticatec/common-express-server';
+import { CommonRouter, CommonRouterHelper, CustomChecker } from '@ticatec/common-express-server';
 
-// Custom user checker function
-const customUserChecker: UserChecker = (req: Request): boolean => {
-    // Your custom authentication logic
-    const userRole = req.headers['user-role'];
-    return userRole === 'admin' || userRole === 'moderator';
-};
+class AdminRoutes extends CommonRouter<CommonRouterHelper> {
 
-class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        // Use custom user checker instead of default
-        super(helper, customUserChecker);
-        this.setupRoutes();
+    // Custom authentication check
+    protected getGlobalHandler(): boolean | CustomChecker {
+        // Custom authentication logic
+        return (req: Request): boolean => {
+            const userRole = req.headers['user-role'];
+            return userRole === 'admin' || userRole === 'moderator';
+        };
     }
 
-    private setupRoutes() {
-        this.router.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+    protected bindRoutes() {
+        this.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
@@ -132,14 +159,14 @@ class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
 }
 
 // Skip authentication entirely
-class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        super(helper, false); // No authentication check
-        this.setupRoutes();
+class PublicRoutes extends CommonRouter<CommonRouterHelper> {
+
+    protected getGlobalHandler(): boolean | CustomChecker {
+        return false; // No authentication check
     }
 
-    private setupRoutes() {
-        this.router.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+    protected bindRoutes() {
+        this.get('/info', this.helper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -148,10 +175,10 @@ class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
 }
 ```
 
-The `checkUser` parameter accepts three types:
+The `getGlobalHandler()` method can return:
 - `true` (default): Uses the default `helper.checkLoggedUser()` middleware
 - `false`: Skips user authentication entirely
-- `UserChecker` function: A custom function `(req: Request) => boolean` that returns true if authenticated
+- `CustomChecker` function: A custom function `(req: Request) => boolean` that returns true if authenticated
 
 ### 3. Create Controllers
 
@@ -219,12 +246,13 @@ Middleware utilities for:
 - Error handling
 - Request logging
 
-### CommonRoutes<T>
+### CommonRouter<T>
 
 Base class for route definitions with:
 - Express router integration
 - User authentication checks
 - Logging capabilities
+- Built-in CRUD helper methods (get, post, put, delete)
 
 ### Controllers Hierarchy
 
@@ -234,6 +262,8 @@ Base class for route definitions with:
 - **TenantBaseController<T>**: Tenant-specific operations
 - **AdminSearchController<T>**: Admin search operations
 - **TenantSearchController<T>**: Tenant search operations
+
+📚 **[Complete Controller Guide →](./CONTROLLER.md)**
 
 ## Configuration
 
@@ -484,7 +514,7 @@ export type ValidationRules = Array<BaseValidator>;
 export interface CommonUser {
     accountCode: string;
     name: string;
-    tenant: {
+    tenant?: { // Optional, may not be present for platform admins
         code: string;
         name: string;
     };
@@ -492,6 +522,7 @@ export interface CommonUser {
 }
 
 export interface LoggedUser extends CommonUser {
+    isPlatform?: boolean; // Platform admin flag
     actAs?: CommonUser; // For user impersonation
 }
 ```
@@ -534,7 +565,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support and questions:
 
-- 📧 Email: henry@ticatec.com
+- 📧 Email: huili.f@gmail.com
 - 🐛 Issues: [GitHub Issues](https://github.com/ticatec/common-express-server/issues)
 - 📚 Documentation: [GitHub Repository](https://github.com/ticatec/common-express-server)
 

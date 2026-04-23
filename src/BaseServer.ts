@@ -2,10 +2,9 @@ import express, {Express, NextFunction, Request, Response} from 'express';
 import CommonRouterHelper from "./CommonRouterHelper";
 import {handleError} from "@ticatec/express-exception";
 import fs from 'fs';
-
-
 import http from "http";
 import {Logger} from "log4js";
+import log4js from "log4js";
 import CommonRoutes from "./CommonRoutes";
 
 
@@ -18,7 +17,7 @@ export type moduleLoader = () => Promise<any>;
  * Abstract base server class providing common functionality for Express servers
  * @template T The type of CommonRouterHelper this server uses
  */
-export default abstract class BaseServer<T extends CommonRouterHelper> {
+export default abstract class BaseServer<T extends CommonRouterHelper = CommonRouterHelper> {
 
     /** Logger instance for this server */
     protected logger: Logger;
@@ -32,7 +31,7 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
      * @protected
      */
     protected constructor() {
-
+        this.logger = log4js.getLogger(this.constructor.name);
     }
 
     /**
@@ -72,16 +71,19 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
      * @returns Promise that resolves when server startup is complete
      */
     async startup() {
+        this.logger.info('Starting server...');
         await this.loadConfigFile();
         try {
             await this.beforeStart();
             this.helper = this.getHelper();
             let webConf = this.getWebConf();
+            this.logger.debug('Web configuration loaded', { port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot });
             this.writeCheckFile(webConf.port);
             this.contextRoot = webConf.contextRoot;
             await this.startWebServer(webConf);
         } catch (err) {
             this.logger.error('Startup failed, reason:', err);
+            throw err;
         }
     }
 
@@ -130,7 +132,9 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
         let path = this.getHealthCheckPath();
         this.logger.debug('Loading system health check', path)
         if (path) {
-            app.get(path, (req: Request, res: Response) => {res.send('')});
+            app.get(path, (req: Request, res: Response) => {
+                res.send('')
+            });
         }
     }
 
@@ -149,7 +153,7 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
         await this.bindStaticSite(app);
         await this.setupRoutes(app);
         app.use(this.helper.actionNotFound());
-        app.use((err:Error, req:Request, res:Response, next:NextFunction) => {
+        app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
             this.logger.debug("application error: ", err);
             handleError(err, req, res);
         });
@@ -178,9 +182,10 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
      * @param app Express application instance
      * @protected
      */
-    protected setupExpress(app: Express):void {
+    protected setupExpress(app: Express): void {
 
     }
+
     /**
      * Binds a route to the Express application
      * @param app Express application instance
@@ -191,8 +196,9 @@ export default abstract class BaseServer<T extends CommonRouterHelper> {
      */
     protected async bindRoutes(app: Express, path: string, loader: moduleLoader): Promise<void> {
         let clazz: any = (await loader()).default;
-        let router: CommonRoutes<T> = new clazz(this.helper);
-        router.bindRouter(app, `${this.contextRoot}${path}`);
+        let routes: CommonRoutes<T> = new clazz();
+        this.logger.debug(`Binding route to path: ${path}`);
+        routes.bind(app, this.helper, path);
     }
 
     /**

@@ -20,6 +20,10 @@
 - 📊 **日志记录**: 与 log4js 集成的结构化日志
 - 🎨 **TypeScript 优先**: 完整的 TypeScript 支持和全面的类型定义
 
+## 文档
+
+- **[Controller 使用指南](./CONTROLLER_CN.md)** - 控制器使用完整指南，包括 CRUD 和搜索操作
+
 ## 安装
 
 ```bash
@@ -72,20 +76,46 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
+#### 扩展用户处理
+
+你可以扩展 `CommonRouterHelper` 来为登录用户添加自定义处理：
+
+```typescript
+import { CommonRouterHelper } from '@ticatec/common-express-server';
+import LoggedUser from '@ticatec/common-express-server/LoggedUser';
+
+class CustomRouterHelper extends CommonRouterHelper {
+    /**
+     * 重写以添加自定义用户处理
+     */
+    protected async handleLoggedUser(user: LoggedUser): Promise<LoggedUser> {
+        // 从数据库加载额外的用户数据
+        const userData = await this.database.getUserById(user.accountCode);
+
+        // 添加自定义权限
+        const permissions = await this.database.getUserPermissions(user.accountCode);
+
+        // 丰富用户对象
+        return {
+            ...user,
+            profile: userData.profile,
+            permissions: permissions,
+            lastLogin: userData.lastLogin
+        };
+    }
+}
+```
+
 ### 2. 创建路由
 
 ```typescript
-import { CommonRoutes, CommonRouterHelper } from '@ticatec/common-express-server';
+import { CommonRouter, CommonRouterHelper } from '@ticatec/common-express-server';
 
-class UserRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        super(helper); // 默认 checkUser = true
-        this.setupRoutes();
-    }
+class UserRoutes extends CommonRouter<CommonRouterHelper> {
 
-    private setupRoutes() {
-        this.router.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
-        this.router.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
+    protected bindRoutes() {
+        this.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
+        this.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -104,27 +134,24 @@ export default UserRoutes;
 
 #### 自定义用户认证
 
-你可以向 `CommonRoutes` 构造函数提供自定义的用户验证函数：
+你可以重写 `getGlobalHandler()` 方法来提供自定义认证：
 
 ```typescript
-import { CommonRoutes, CommonRouterHelper, UserChecker } from '@ticatec/common-express-server';
+import { CommonRouter, CommonRouterHelper, CustomChecker } from '@ticatec/common-express-server';
 
-// 自定义用户检查函数
-const customUserChecker: UserChecker = (req: Request): boolean => {
-    // 你的自定义认证逻辑
-    const userRole = req.headers['user-role'];
-    return userRole === 'admin' || userRole === 'moderator';
-};
+class AdminRoutes extends CommonRouter<CommonRouterHelper> {
 
-class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        // 使用自定义用户检查器而不是默认的
-        super(helper, customUserChecker);
-        this.setupRoutes();
+    // 自定义认证检查
+    protected getGlobalHandler(): boolean | CustomChecker {
+        // 自定义认证逻辑
+        return (req: Request): boolean => {
+            const userRole = req.headers['user-role'];
+            return userRole === 'admin' || userRole === 'moderator';
+        };
     }
 
-    private setupRoutes() {
-        this.router.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+    protected bindRoutes() {
+        this.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
@@ -133,14 +160,14 @@ class AdminRoutes extends CommonRoutes<CommonRouterHelper> {
 }
 
 // 完全跳过认证
-class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
-    constructor(helper: CommonRouterHelper) {
-        super(helper, false); // 不进行认证检查
-        this.setupRoutes();
+class PublicRoutes extends CommonRouter<CommonRouterHelper> {
+
+    protected getGlobalHandler(): boolean | CustomChecker {
+        return false; // 不进行认证检查
     }
 
-    private setupRoutes() {
-        this.router.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+    protected bindRoutes() {
+        this.get('/info', this.helper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -149,10 +176,10 @@ class PublicRoutes extends CommonRoutes<CommonRouterHelper> {
 }
 ```
 
-`checkUser` 参数接受三种类型：
+`getGlobalHandler()` 方法可以返回：
 - `true`（默认）: 使用默认的 `helper.checkLoggedUser()` 中间件
 - `false`: 完全跳过用户认证
-- `UserChecker` 函数: 自定义函数 `(req: Request) => boolean`，认证通过时返回 true
+- `CustomChecker` 函数: 自定义函数 `(req: Request) => boolean`，认证通过时返回 true
 
 ### 3. 创建控制器
 
@@ -220,12 +247,13 @@ class UserController extends TenantBaseController<UserService> {
 - 错误处理
 - 请求日志记录
 
-### CommonRoutes<T>
+### CommonRouter<T>
 
 路由定义基类，具有：
 - Express 路由器集成
 - 用户认证检查
 - 日志记录功能
+- 内置的CRUD辅助方法（get、post、put、delete）
 
 ### 控制器层次结构
 
@@ -235,6 +263,8 @@ class UserController extends TenantBaseController<UserService> {
 - **TenantBaseController<T>**: 租户特定操作
 - **AdminSearchController<T>**: 管理员搜索操作
 - **TenantSearchController<T>**: 租户搜索操作
+
+📚 **[完整控制器使用指南 →](./CONTROLLER_CN.md)**
 
 ## 配置
 
@@ -485,7 +515,7 @@ export type ValidationRules = Array<BaseValidator>;
 export interface CommonUser {
     accountCode: string;
     name: string;
-    tenant: {
+    tenant?: { // 可选，平台管理员可能没有租户信息
         code: string;
         name: string;
     };
@@ -493,6 +523,7 @@ export interface CommonUser {
 }
 
 export interface LoggedUser extends CommonUser {
+    isPlatform?: boolean; // 平台管理员标识
     actAs?: CommonUser; // 用于用户扮演
 }
 ```
@@ -535,7 +566,7 @@ npm run dev           # 开发模式（监听）
 
 获取支持和提问：
 
-- 📧 邮箱: henry@ticatec.com
+- 📧 邮箱: huili.f@gmail.com
 - 🐛 问题: [GitHub Issues](https://github.com/ticatec/common-express-server/issues)
 - 📚 文档: [GitHub 仓库](https://github.com/ticatec/common-express-server)
 

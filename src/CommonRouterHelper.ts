@@ -1,6 +1,7 @@
 import {NextFunction, Request, Response} from "express";
 import {ActionNotFoundError, handleError, UnauthenticatedError} from '@ticatec/express-exception';
 import log4js from "log4js";
+import LoggedUser from "./LoggedUser";
 
 
 /**
@@ -97,7 +98,7 @@ export default class CommonRouterHelper {
      * @param req Express request object
      * @protected
      */
-    protected retrieveUserFormHeader(req: Request) {
+    protected async retrieveUserFormHeader(req: Request): Promise<void> {
         let userStr: string = req.headers['user'] as string;
         if (userStr != null) {
             try {
@@ -109,11 +110,28 @@ export default class CommonRouterHelper {
                     }
                     user['language'] = language
                 }
-                req['user'] = user;
+                req['user'] = await this.handleLoggedUser(user);
+                this.logger.debug(`User retrieved from header: ${user.accountCode}`);
             } catch (ex) {
-                this.logger.debug('Invalid user header', userStr);
+                this.logger.warn('Invalid user header format', { error: ex.message, path: req.path });
             }
         }
+    }
+
+    /**
+     * Hook method for subclasses to extend and process logged user information
+     * This method is called after retrieving user from headers and before setting it to request
+     * Subclasses can override this method to add custom processing such as:
+     * - Loading additional user data from database
+     * - Validating user permissions
+     * - Enriching user information
+     * - Custom logging
+     * @param user The logged user object retrieved from headers
+     * @returns Promise resolving to the processed user object
+     * @protected
+     */
+    protected async handleLoggedUser(user: LoggedUser): Promise<LoggedUser> {
+        return user;
     }
 
     /**
@@ -121,8 +139,8 @@ export default class CommonRouterHelper {
      * @returns Express middleware function
      */
     retrieveUser() {
-        return (req: Request, res: Response, next: any) => {
-            this.retrieveUserFormHeader(req);
+        return async (req: Request, res: Response, next: any) => {
+            await this.retrieveUserFormHeader(req);
             next();
         }
     }
@@ -136,8 +154,10 @@ export default class CommonRouterHelper {
         return (req: Request, res: Response, next: any) => {
             this.retrieveUserFormHeader(req);
             if (req['user'] == null) {
+                this.logger.warn('Unauthenticated request', { path: req.path, method: req.method });
                 handleError(new UnauthenticatedError(), req, res);
             } else {
+                this.logger.debug(`User authenticated: ${req['user'].accountCode}`);
                 next();
             }
         }

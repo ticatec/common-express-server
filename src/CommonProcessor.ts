@@ -35,7 +35,7 @@ export default abstract class CommonProcessor<T> {
             this.logger.debug('启动处理器');
             this.nappingDuration = this.interval;
             this.status = ProcessStatus.Napping;
-            this.processInterval = setInterval(this.checkNap(), 1000);
+            this.processInterval = setInterval(() => this.checkNap(), 1000);
         }
     }
 
