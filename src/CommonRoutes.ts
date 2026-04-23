@@ -9,15 +9,15 @@ import {UnauthenticatedError} from "@ticatec/express-exception";
  * @param req Express request object
  * @returns true if request should be allowed, false otherwise
  */
-export type CustomChecker = (req: Request) => boolean;
+export type CustomChecker = (req: Request) => Promise<boolean>;
 
 /**
  * Creates middleware for custom authentication checking
  * @param checker Custom checker function to validate requests
  * @returns Express middleware function
  */
-const customCheck = (checker: CustomChecker) => (req: Request, res: Response, next: NextFunction) => {
-    if (checker(req)) {
+const customCheck = (checker: CustomChecker) => async (req: Request, res: Response, next: NextFunction) => {
+    if (await checker(req)) {
         next();
     } else {
         throw new UnauthenticatedError();
