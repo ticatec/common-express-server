@@ -83,7 +83,7 @@ export default class CommonRouter<T extends CommonRouterHelper> {
      * @protected
      */
     protected getGlobalHandler(): boolean | CustomChecker {
-        return true;
+        return false;
     }
 
     /**

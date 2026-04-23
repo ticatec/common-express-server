@@ -1,6 +1,6 @@
 {
   "name": "@ticatec/common-express-server",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Enterprise-grade TypeScript framework for Express.js with built-in multi-tenant support, CRUD controllers, validation, authentication, and API gateway integration. Simplifies building scalable REST APIs with boilerplate-free routing, automatic error handling, and structured logging.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
