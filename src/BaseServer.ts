@@ -155,7 +155,7 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
         app.use(this.helper.actionNotFound());
         app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
             this.logger.debug("application error: ", err);
-            handleError(err, req, res);
+            handleError(err, req, res, next);
         });
 
         return new Promise(resolve => {

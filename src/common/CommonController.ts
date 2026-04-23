@@ -79,7 +79,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
     protected checkInterface(name: string):void {
         if (this.service[name] == null) {
             this.logger.warn(`Current service does not have interface: ${name}`);
-            throw new ActionNotFoundError(`Current service does not have interface: ${name}`);
+            throw new ActionNotFoundError();
         }
     }
 
@@ -139,7 +139,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
     protected _del(req: Request): Promise<any> {
         // Please implement delete interface in subclass, otherwise system exception will be thrown
         this.logger.warn('Current service does not have delete interface');
-        throw new ActionNotFoundError('Current service does not have delete interface');
+        throw new ActionNotFoundError();
     }
 
     /**

@@ -53,7 +53,7 @@ export default class CommonRouterHelper {
      * @returns Express middleware function
      */
     invokeRestfulAction(func: RestfulFunction): any {
-        return async (req: Request, res: Response): Promise<void> => {
+        return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
             try {
                 let result = await func(req);
                 if (result != null) {
@@ -62,7 +62,7 @@ export default class CommonRouterHelper {
                     res.status(204).send();
                 }
             } catch (ex) {
-                handleError(ex, req, res);
+                handleError(ex, req, res, null);
             }
         }
     }
@@ -73,11 +73,11 @@ export default class CommonRouterHelper {
      * @returns Express middleware function
      */
     invokeController(func: ControlFunction) {
-        return async (req: Request, res: Response): Promise<void> => {
+        return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
             try {
                 await func(req, res);
             } catch (ex) {
-                handleError(ex, req, res);
+                handleError(ex, req, res, null);
             }
         }
     }
@@ -89,7 +89,7 @@ export default class CommonRouterHelper {
      */
     actionNotFound() {
         return (req: Request, res: Response, next: NextFunction) => {
-            handleError(new ActionNotFoundError(), req, res);
+            handleError(new ActionNotFoundError(), req, res, null);
         }
     }
 
@@ -151,11 +151,11 @@ export default class CommonRouterHelper {
      * @returns Express middleware function that validates user authentication
      */
     checkLoggedUser() {
-        return (req: Request, res: Response, next: any) => {
-            this.retrieveUserFormHeader(req);
+        return async (req: Request, res: Response, next: any) => {
+            await this.retrieveUserFormHeader(req);
             if (req['user'] == null) {
                 this.logger.warn('Unauthenticated request', { path: req.path, method: req.method });
-                handleError(new UnauthenticatedError(), req, res);
+                handleError(new UnauthenticatedError(), req, res, null);
             } else {
                 this.logger.debug(`User authenticated: ${req['user'].accountCode}`);
                 next();
