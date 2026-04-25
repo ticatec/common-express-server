@@ -18,7 +18,6 @@
 - 🌐 **国际化**: 通过请求头内置语言支持
 - 📊 **日志记录**: 与 log4js 集成的结构化日志
 - 🎨 **TypeScript 优先**: 完整的 TypeScript 支持和全面的类型定义
-- 🎁 **零配置**: 单例模式工具类，无需继承
 
 ## 文档
 
@@ -41,18 +40,7 @@ npm install express@^5.1.0
 ### 1. 创建基础服务器
 
 ```typescript
-import { BaseServer, RouterHelper } from '@ticatec/common-express-server';
-
-// 可选：设置自定义用户处理钩子
-RouterHelper.setHandleLoggedUserHook(async (user) => {
-    // 从数据库加载额外的用户数据
-    const userData = await database.getUserById(user.accountCode);
-    return {
-        ...user,
-        profile: userData.profile,
-        permissions: await database.getUserPermissions(user.accountCode)
-    };
-});
+import { BaseServer } from '@ticatec/common-express-server';
 
 class MyServer extends BaseServer {
     protected async loadConfigFile(): Promise<void> {
@@ -82,14 +70,9 @@ BaseServer.startup(server);
 ### 2. 创建路由
 
 ```typescript
-import { CommonRoutes, RouterHelper } from '@ticatec/common-express-server';
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class UserRoutes extends CommonRoutes {
-
-    // 启用默认用户认证
-    protected doUserCheck(): boolean {
-        return true;
-    }
 
     // 加载额外的用户数据
     protected getUserHook(): ((user: any) => any) | null {
@@ -101,8 +84,8 @@ class UserRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
-        this.post('/update', RouterHelper.invokeRestfulAction(this.updateProfile));
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
+        this.post('/update', routerHelper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -128,10 +111,6 @@ import { CommonRoutes } from '@ticatec/common-express-server';
 
 class AdminRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return true; // 需要认证
-    }
-
     // 处理并丰富用户数据
     protected getUserHook(): ((user: any) => any) | null {
         return async (user) => {
@@ -146,7 +125,7 @@ class AdminRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/dashboard', RouterHelper.invokeRestfulAction(this.getDashboard));
+        this.get('/dashboard', routerHelper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
@@ -168,10 +147,6 @@ import { CommonRoutes } from '@ticatec/common-express-server';
 
 class VerifiedUserRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return true; // 需要认证
-    }
-
     // 验证用户账户状态
     protected async userCheck(user: any): Promise<boolean> {
         if (!user) {
@@ -183,7 +158,7 @@ class VerifiedUserRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -219,13 +194,9 @@ class TenantRoutes extends CommonRoutes {
 使用 `getGlobalHandler()` 添加自定义中间件：
 
 ```typescript
-import { CommonRoutes } from '@ticatec/common-express-server';
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class ApiRoutes extends CommonRoutes {
-
-    protected doUserCheck(): boolean {
-        return true;
-    }
 
     // 添加自定义全局中间件
     protected getGlobalHandler(): RequestHandler | null {
@@ -240,7 +211,7 @@ class ApiRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/data', RouterHelper.invokeRestfulAction(this.getData));
+        this.get('/data', routerHelper.invokeRestfulAction(this.getData));
     }
 
     private getData = async (req: Request) => {
@@ -252,14 +223,17 @@ class ApiRoutes extends CommonRoutes {
 #### 公开路由（无需认证）
 
 ```typescript
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
+
 class PublicRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return false; // 不需要认证
+    // 覆盖 userCheck 以允许公开访问（无需认证）
+    protected userCheck(user: any): boolean {
+        return true; // 允许无需认证访问
     }
 
     protected bindRoutes() {
-        this.get('/info', RouterHelper.invokeRestfulAction(this.getInfo));
+        this.get('/info', routerHelper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -326,10 +300,6 @@ class UserController extends TenantBaseController<UserService> {
 - 静态文件服务
 - **全局用户解析**（非侵入式，适用于所有请求）
 
-**主要特性：**
-- 无需泛型参数
-- 不需要 `getHelper()` 方法
-- 使用单例 `RouterHelper` 工具类
 
 **全局中间件顺序：**
 ```
@@ -349,25 +319,18 @@ class UserController extends TenantBaseController<UserService> {
 - 用户认证
 - 错误处理
 - 请求日志记录
-- 自定义用户处理钩子
 
 **使用方法：**
 ```typescript
-import { RouterHelper } from '@ticatec/common-express-server';
-
-// 设置自定义用户处理钩子
-RouterHelper.setHandleLoggedUserHook(async (user) => {
-    // 自定义用户处理
-    return user;
-});
+import { routerHelper } from '@ticatec/common-express-server';
 
 // 使用中间件
-RouterHelper.setNoCache           // 禁用缓存
-RouterHelper.checkLoggedUser()    // 要求认证
-RouterHelper.retrieveUser()       // 解析用户（非侵入式）
-RouterHelper.actionNotFound()     // 404 处理器
-RouterHelper.invokeRestfulAction() // 包装异步处理器
-RouterHelper.invokeController()    // 包装控制器处理器
+routerHelper.setNoCache           // 禁用缓存
+routerHelper.checkLoggedUser()    // 要求认证
+routerHelper.retrieveUser()       // 解析用户（非侵入式）
+routerHelper.actionNotFound()     // 404 处理器
+routerHelper.invokeRestfulAction() // 包装异步处理器
+routerHelper.invokeController()    // 包装控制器处理器
 ```
 
 ### CommonRoutes
@@ -383,15 +346,13 @@ RouterHelper.invokeController()    // 包装控制器处理器
 
 **中间件执行顺序：**
 ```
-1. doUserCheck()           - 如果为 true 则 checkLoggedUser
-2. getUserHook()           - 处理并丰富用户数据
-3. userCheck()             - 自定义用户验证
-4. getGlobalHandler()      - 自定义中间件
-5. bindRoutes()            - 路由定义
+1. getUserHook()           - 处理并丰富用户数据
+2. userCheck()             - 自定义用户验证
+3. getGlobalHandler()      - 自定义中间件
+4. bindRoutes()            - 路由定义
 ```
 
 **关键方法：**
-- `doUserCheck(): boolean` - 启用/禁用认证
 - `getUserHook(): ((user: any) => any) | null` - 处理用户数据
 - `userCheck(user: any): boolean | Promise<boolean>` - 自定义用户验证
 - `getGlobalHandler(): RequestHandler | null` - 自定义中间件
@@ -427,11 +388,10 @@ RouterHelper.invokeController()    // 包装控制器处理器
 ┌─────────────────────────────────────────────────────────────┐
 │              CommonRoutes 中间件执行顺序                     │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. doUserCheck()           - 如果为 true 则 checkLoggedUser  │
-│ 2. getUserHook()           - 处理用户数据                    │
-│ 3. userCheck()             - 自定义用户验证                  │
-│ 4. getGlobalHandler()      - 自定义中间件                    │
-│ 5. bindRoutes()            - 路由定义                        │
+│ 1. getUserHook()           - 处理用户数据                    │
+│ 2. userCheck()             - 自定义用户验证                  │
+│ 3. getGlobalHandler()      - 自定义中间件                    │
+│ 4. bindRoutes()            - 路由定义                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -589,7 +549,6 @@ throw new IllegalParameterError('输入数据无效');
 export type RestfulFunction = (req: Request) => any;
 export type ControlFunction = (req: Request, res: Response) => any;
 export type moduleLoader = () => Promise<any>;
-export type HandleLoggedUserHook = (user: LoggedUser) => Promise<LoggedUser>;
 
 // 用户接口
 export interface CommonUser {

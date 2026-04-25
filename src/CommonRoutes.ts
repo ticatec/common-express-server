@@ -1,5 +1,5 @@
 import {Express, Request, Response, Router} from "express";
-import RouterHelper from "./RouterHelper";
+import routerHelper from "./RouterHelper";
 import log4js, {Logger} from "log4js";
 import {RequestHandler, NextFunction} from "express-serve-static-core";
 import {UnauthenticatedError} from "@ticatec/express-exception";
@@ -14,20 +14,14 @@ import {UnauthenticatedError} from "@ticatec/express-exception";
  * - Global middleware handlers
  *
  * The middleware execution order is:
- * 1. Authentication check (if `doUserCheck()` returns true)
- * 2. User hook processing (if `getUserHook()` returns a function)
- * 3. Custom user validation check (via `userCheck()`)
- * 4. Global middleware (if `getGlobalHandler()` returns a handler)
- * 5. Route handlers (defined in `bindRoutes()`)
+ * 1. User hook processing (if `getUserHook()` returns a function)
+ * 2. Custom user validation check (via `userCheck()`)
+ * 3. Global middleware (if `getGlobalHandler()` returns a handler)
+ * 4. Route handlers (defined in `bindRoutes()`)
  *
  * @example
  * ```typescript
  * class UserRoutes extends CommonRoutes {
- *   // Enable default user authentication
- *   protected doUserCheck(): boolean {
- *     return true;
- *   }
- *
  *   // Load additional user data
  *   protected getUserHook(): ((user: any) => any) | null {
  *     return async (user) => {
@@ -37,16 +31,19 @@ import {UnauthenticatedError} from "@ticatec/express-exception";
  *     };
  *   }
  *
- *   // Custom user validation
+ *   // Enable authentication and validation
  *   protected async userCheck(user: any): Promise<boolean> {
- *     // Check if user account is active
+ *     // Check if user exists and account is active
+ *     if (!user) {
+ *       return false;
+ *     }
  *     const account = await database.getAccount(user.accountCode);
  *     return account && account.status === 'active';
  *   }
  *
  *   // Define routes
  *   protected bindRoutes() {
- *     this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+ *     this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
  *   }
  *
  *   private getProfile = async (req: Request) => {
@@ -74,22 +71,17 @@ export default class CommonRoutes {
      * Binds this router to the Express application with the given path
      *
      * The binding process follows this order:
-     * 1. If `doUserCheck()` returns true, adds default authentication middleware
-     * 2. If `getUserHook()` returns a function, adds user hook middleware (with error handling)
-     * 3. Adds custom user validation middleware (via `userCheck()`)
-     * 4. If `getGlobalHandler()` returns a handler, adds global middleware
-     * 5. Calls `bindRoutes()` to register route definitions
-     * 6. Mounts the router to the Express app at the specified path
+     * 1. If `getUserHook()` returns a function, adds user hook middleware (with error handling)
+     * 2. Adds custom user validation middleware (via `userCheck()`)
+     * 3. If `getGlobalHandler()` returns a handler, adds global middleware
+     * 4. Calls `bindRoutes()` to register route definitions
+     * 5. Mounts the router to the Express app at the specified path
      *
      * @param app Express application instance
      * @param path The route path to bind this router to
      */
     async bind(app: Express, path: string): Promise<void> {
         this.logger.debug(`Binding router to path: ${path}`);
-        if (this.doUserCheck()) {
-            this.logger.debug('Adding default user authentication check');
-            this.router.use(RouterHelper.checkLoggedUser());
-        }
         let userHook = this.getUserHook();
         if (userHook) {
             this.router.use(async (req: Request, _res: Response, next: NextFunction) => {
@@ -185,32 +177,6 @@ export default class CommonRoutes {
         return true;
     }
 
-    /**
-     * Determines whether to perform default user authentication check
-     *
-     * Override this method to enable/disable default user authentication.
-     * When returning true, the default `checkLoggedUser()` middleware will be added,
-     * which verifies that a user is present in the request (after global user parsing).
-     *
-     * @returns true to enable default user authentication, false otherwise
-     * @protected
-     *
-     * @example
-     * ```typescript
-     * // Require authentication for all routes
-     * protected doUserCheck(): boolean {
-     *   return true;
-     * }
-     *
-     * // No authentication required (public routes)
-     * protected doUserCheck(): boolean {
-     *   return false;
-     * }
-     * ```
-     */
-    protected doUserCheck(): boolean {
-        return false;
-    }
 
     /**
      * Abstract method for binding routes
@@ -231,8 +197,8 @@ export default class CommonRoutes {
      *     res.json({ users: [] });
      *   });
      *
-     *   // Using RouterHelper for automatic error handling
-     *   this.post('/users', RouterHelper.invokeRestfulAction(async (req) => {
+     *   // Using routerHelper for automatic error handling
+     *   this.post('/users', routerHelper.invokeRestfulAction(async (req) => {
      *     return await createNewUser(req.body);
      *   }));
      *
@@ -304,8 +270,8 @@ export default class CommonRoutes {
      *   res.json({ users: [] });
      * });
      *
-     * // With RouterHelper for automatic error handling
-     * this.get('/users/:id', RouterHelper.invokeRestfulAction(async (req) => {
+     * // With routerHelper for automatic error handling
+     * this.get('/users/:id', routerHelper.invokeRestfulAction(async (req) => {
      *   const user = await getUserById(req.params.id);
      *   return user;
      * }));
@@ -329,8 +295,8 @@ export default class CommonRoutes {
      *   res.status(201).json(user);
      * });
      *
-     * // With RouterHelper
-     * this.post('/users', RouterHelper.invokeRestfulAction(async (req) => {
+     * // With routerHelper
+     * this.post('/users', routerHelper.invokeRestfulAction(async (req) => {
      *   return await createUser(req.body);
      * }));
      * ```
@@ -347,7 +313,7 @@ export default class CommonRoutes {
      *
      * @example
      * ```typescript
-     * this.put('/users/:id', RouterHelper.invokeRestfulAction(async (req) => {
+     * this.put('/users/:id', routerHelper.invokeRestfulAction(async (req) => {
      *   return await updateUser(req.params.id, req.body);
      * }));
      * ```
@@ -364,7 +330,7 @@ export default class CommonRoutes {
      *
      * @example
      * ```typescript
-     * this.delete('/users/:id', RouterHelper.invokeRestfulAction(async (req) => {
+     * this.delete('/users/:id', routerHelper.invokeRestfulAction(async (req) => {
      *   await deleteUser(req.params.id);
      *   res.status(204).send();
      * }));
@@ -382,9 +348,9 @@ export default class CommonRoutes {
      * The hook function receives the user object (from `req['user']`) and returns a
      * processed user object. The returned value will replace `req['user']`.
      *
-     * This hook is executed after authentication check (if enabled) and is wrapped
-     * with automatic error handling - any errors thrown will be passed to Express's
-     * error handling middleware.
+     * This hook is executed after the global user parsing (in BaseServer) and before
+     * the custom user validation check. It is wrapped with automatic error handling -
+     * any errors thrown will be passed to Express's error handling middleware.
      *
      * This is useful for:
      * - Loading additional user-specific data from database

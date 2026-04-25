@@ -18,7 +18,6 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 - 🌐 **Internationalization**: Built-in language support via headers
 - 📊 **Logging**: Structured logging with log4js integration
 - 🎨 **TypeScript First**: Full TypeScript support with comprehensive type definitions
-- 🎁 **Zero Configuration**: Singleton pattern utilities, no inheritance needed
 
 ## Documentation
 
@@ -41,18 +40,7 @@ npm install express@^5.1.0
 ### 1. Create a Basic Server
 
 ```typescript
-import { BaseServer, RouterHelper } from '@ticatec/common-express-server';
-
-// Optional: Set up custom user processing hook
-RouterHelper.setHandleLoggedUserHook(async (user) => {
-    // Load additional user data from database
-    const userData = await database.getUserById(user.accountCode);
-    return {
-        ...user,
-        profile: userData.profile,
-        permissions: await database.getUserPermissions(user.accountCode)
-    };
-});
+import { BaseServer } from '@ticatec/common-express-server';
 
 class MyServer extends BaseServer {
     protected async loadConfigFile(): Promise<void> {
@@ -82,14 +70,9 @@ BaseServer.startup(server);
 ### 2. Create Routes
 
 ```typescript
-import { CommonRoutes, RouterHelper } from '@ticatec/common-express-server';
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class UserRoutes extends CommonRoutes {
-
-    // Enable default user authentication
-    protected doUserCheck(): boolean {
-        return true;
-    }
 
     // Load additional user data
     protected getUserHook(): ((user: any) => any) | null {
@@ -101,8 +84,8 @@ class UserRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
-        this.post('/update', RouterHelper.invokeRestfulAction(this.updateProfile));
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
+        this.post('/update', routerHelper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -128,10 +111,6 @@ import { CommonRoutes } from '@ticatec/common-express-server';
 
 class AdminRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return true; // Require authentication
-    }
-
     // Process and enrich user data
     protected getUserHook(): ((user: any) => any) | null {
         return async (user) => {
@@ -146,7 +125,7 @@ class AdminRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/dashboard', RouterHelper.invokeRestfulAction(this.getDashboard));
+        this.get('/dashboard', routerHelper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
@@ -168,10 +147,6 @@ import { CommonRoutes } from '@ticatec/common-express-server';
 
 class VerifiedUserRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return true; // Require authentication
-    }
-
     // Validate user account status
     protected async userCheck(user: any): Promise<boolean> {
         if (!user) {
@@ -183,7 +158,7 @@ class VerifiedUserRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -219,13 +194,9 @@ class TenantRoutes extends CommonRoutes {
 Use `getGlobalHandler()` to add custom middleware:
 
 ```typescript
-import { CommonRoutes } from '@ticatec/common-express-server';
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class ApiRoutes extends CommonRoutes {
-
-    protected doUserCheck(): boolean {
-        return true;
-    }
 
     // Add custom global middleware
     protected getGlobalHandler(): RequestHandler | null {
@@ -240,7 +211,7 @@ class ApiRoutes extends CommonRoutes {
     }
 
     protected bindRoutes() {
-        this.get('/data', RouterHelper.invokeRestfulAction(this.getData));
+        this.get('/data', routerHelper.invokeRestfulAction(this.getData));
     }
 
     private getData = async (req: Request) => {
@@ -252,14 +223,17 @@ class ApiRoutes extends CommonRoutes {
 #### Public Routes (No Authentication)
 
 ```typescript
+import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
+
 class PublicRoutes extends CommonRoutes {
 
-    protected doUserCheck(): boolean {
-        return false; // No authentication required
+    // Override userCheck to allow public access (no authentication required)
+    protected userCheck(user: any): boolean {
+        return true; // Allow access without authentication
     }
 
     protected bindRoutes() {
-        this.get('/info', RouterHelper.invokeRestfulAction(this.getInfo));
+        this.get('/info', routerHelper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -326,10 +300,6 @@ Abstract base server class that provides:
 - Static file serving
 - **Global user parsing** (non-invasive, for all requests)
 
-**Key Features:**
-- No generic parameters needed
-- No `getHelper()` method required
-- Uses singleton `RouterHelper` for utilities
 
 **Global Middleware Order:**
 ```
@@ -349,25 +319,18 @@ Middleware utilities for:
 - User authentication
 - Error handling
 - Request logging
-- Custom user processing hooks
 
 **Usage:**
 ```typescript
-import { RouterHelper } from '@ticatec/common-express-server';
-
-// Set custom user processing hook
-RouterHelper.setHandleLoggedUserHook(async (user) => {
-    // Custom user processing
-    return user;
-});
+import { routerHelper } from '@ticatec/common-express-server';
 
 // Use middleware
-RouterHelper.setNoCache           // Disable caching
-RouterHelper.checkLoggedUser()    // Require authentication
-RouterHelper.retrieveUser()       // Parse user (non-invasive)
-RouterHelper.actionNotFound()     // 404 handler
-RouterHelper.invokeRestfulAction() // Wrap async handlers
-RouterHelper.invokeController()    // Wrap controller handlers
+routerHelper.setNoCache           // Disable caching
+routerHelper.checkLoggedUser()    // Require authentication
+routerHelper.retrieveUser()       // Parse user (non-invasive)
+routerHelper.actionNotFound()     // 404 handler
+routerHelper.invokeRestfulAction() // Wrap async handlers
+routerHelper.invokeController()    // Wrap controller handlers
 ```
 
 ### CommonRoutes
@@ -383,15 +346,13 @@ Base class for route definitions with:
 
 **Middleware Order:**
 ```
-1. doUserCheck()           - checkLoggedUser() if true
-2. getUserHook()           - Process and enrich user data
-3. userCheck()             - Custom user validation
-4. getGlobalHandler()      - Custom middleware
-5. bindRoutes()            - Route definitions
+1. getUserHook()           - Process and enrich user data
+2. userCheck()             - Custom user validation
+3. getGlobalHandler()      - Custom middleware
+4. bindRoutes()            - Route definitions
 ```
 
 **Key Methods:**
-- `doUserCheck(): boolean` - Enable/disable authentication
 - `getUserHook(): ((user: any) => any) | null` - Process user data
 - `userCheck(user: any): boolean | Promise<boolean>` - Custom user validation
 - `getGlobalHandler(): RequestHandler | null` - Custom middleware
@@ -427,11 +388,10 @@ Base class for route definitions with:
 ┌─────────────────────────────────────────────────────────────┐
 │              CommonRoutes Middleware Order                   │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. doUserCheck()           - checkLoggedUser() if true      │
-│ 2. getUserHook()           - Process user data             │
-│ 3. userCheck()             - Custom user validation         │
-│ 4. getGlobalHandler()      - Custom middleware              │
-│ 5. bindRoutes()            - Route definitions              │
+│ 1. getUserHook()           - Process user data             │
+│ 2. userCheck()             - Custom user validation         │
+│ 3. getGlobalHandler()      - Custom middleware              │
+│ 4. bindRoutes()            - Route definitions              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -589,7 +549,6 @@ throw new IllegalParameterError('Invalid input data');
 export type RestfulFunction = (req: Request) => any;
 export type ControlFunction = (req: Request, res: Response) => any;
 export type moduleLoader = () => Promise<any>;
-export type HandleLoggedUserHook = (user: LoggedUser) => Promise<LoggedUser>;
 
 // User interfaces
 export interface CommonUser {

@@ -35,67 +35,15 @@ export type RestfulFunction = (req: Request) => any;
 export type ControlFunction = (req: Request, res: Response) => any;
 
 /**
- * Custom hook for handling logged user
- *
- * This hook is called after retrieving user from headers and before setting it to request.
- * Use this to load additional user data, validate permissions, or enrich user information.
- *
- * @example
- * ```typescript
- * const hook: HandleLoggedUserHook = async (user) => {
- *   // Load additional data
- *   user.preferences = await loadUserPreferences(user.accountCode);
- *   user.permissions = await loadUserPermissions(user.accountCode);
- *   return user;
- * };
- * ```
- */
-export type HandleLoggedUserHook = (user: LoggedUser) => Promise<LoggedUser>;
-
-/**
  * Internal class providing middleware and utilities for Express routing
  *
- * This class is not exported directly. Use the singleton instance `RouterHelper` instead.
+ * This class is not exported directly. Use the singleton instance `routerHelper` instead.
  *
  * @internal
  */
-class _RouterHelper {
+class RouterHelper {
 
     private readonly logger = log4js.getLogger('RouterHelper');
-    private handleLoggedUserHook: HandleLoggedUserHook | null = null;
-
-    /**
-     * Sets a custom hook to process logged user information
-     *
-     * This hook is called after retrieving user from headers and before setting it to request.
-     * Use this to load additional user data, validate permissions, or enrich user information.
-     *
-     * @param hook The hook function to process user
-     *
-     * @example
-     * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
-     *
-     * RouterHelper.setHandleLoggedUserHook(async (user) => {
-     *   // Load additional user data from database
-     *   const userData = await database.getUserById(user.accountCode);
-     *
-     *   // Add custom permissions
-     *   const permissions = await database.getUserPermissions(user.accountCode);
-     *
-     *   // Enrich user object
-     *   return {
-     *     ...user,
-     *     profile: userData.profile,
-     *     permissions: permissions,
-     *     lastLogin: userData.lastLogin
-     *   };
-     * });
-     * ```
-     */
-    setHandleLoggedUserHook(hook: HandleLoggedUserHook) {
-        this.handleLoggedUserHook = hook;
-    }
 
     /**
      * Sets HTTP response header to JSON format
@@ -142,11 +90,11 @@ class _RouterHelper {
      *
      * @example
      * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
+     * import { routerHelper } from '@ticatec/common-express-server';
      *
      * class UserRoutes extends CommonRoutes {
      *   protected bindRoutes() {
-     *     this.get('/users/:id', RouterHelper.invokeRestfulAction(this.getUser));
+     *     this.get('/users/:id', routerHelper.invokeRestfulAction(this.getUser));
      *   }
      *
      *   private getUser = async (req: Request) => {
@@ -182,11 +130,11 @@ class _RouterHelper {
      *
      * @example
      * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
+     * import { routerHelper } from '@ticatec/common-express-server';
      *
      * class FileRoutes extends CommonRoutes {
      *   protected bindRoutes() {
-     *     this.get('/download/:id', RouterHelper.invokeController(this.downloadFile));
+     *     this.get('/download/:id', routerHelper.invokeController(this.downloadFile));
      *   }
      *
      *   private downloadFile = async (req: Request, res: Response) => {
@@ -217,12 +165,12 @@ class _RouterHelper {
      *
      * @example
      * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
+     * import { routerHelper } from '@ticatec/common-express-server';
      *
      * class MyServer extends BaseServer {
      *   protected async startWebServer(webConf: any) {
      *     // ... setup routes
-     *     app.use(RouterHelper.actionNotFound());
+     *     app.use(routerHelper.actionNotFound());
      *   }
      * }
      * ```
@@ -240,8 +188,7 @@ class _RouterHelper {
      * 1. Parses the 'user' header (URL-encoded JSON)
      * 2. Adds language from 'x-language' header if present
      * 3. Supports user impersonation via 'actAs' field
-     * 4. Applies the custom user hook if set
-     * 5. Sets the processed user to req['user']
+     * 4. Sets the processed user to req['user']
      *
      * Note: If the user header is missing or invalid, this method silently does nothing
      * (allowing public routes to work without authentication).
@@ -261,12 +208,7 @@ class _RouterHelper {
                     user['language'] = language
                 }
 
-                // Apply custom user hook if set
-                if (this.handleLoggedUserHook) {
-                    req['user'] = await this.handleLoggedUserHook(user);
-                } else {
-                    req['user'] = user;
-                }
+                req['user'] = user;
 
                 this.logger.debug(`User retrieved from header: ${user.accountCode}`);
             } catch (ex) {
@@ -288,13 +230,13 @@ class _RouterHelper {
      *
      * @example
      * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
+     * import { routerHelper } from '@ticatec/common-express-server';
      *
      * // Use globally for all routes (non-invasive)
-     * app.use(RouterHelper.retrieveUser());
+     * app.use(routerHelper.retrieveUser());
      *
      * // Use for specific routes
-     * app.get('/public/content', RouterHelper.retrieveUser(), (req, res) => {
+     * app.get('/public/content', routerHelper.retrieveUser(), (req, res) => {
      *   if (req['user']) {
      *     res.json({ message: `Hello ${req['user'].name}` });
      *   } else {
@@ -323,21 +265,14 @@ class _RouterHelper {
      *
      * @example
      * ```typescript
-     * import { RouterHelper } from '@ticatec/common-express-server';
+     * import { routerHelper } from '@ticatec/common-express-server';
      *
      * class ProtectedRoutes extends CommonRoutes {
      *   protected bindRoutes() {
      *     // Require authentication for all routes in this router
-     *     this.get('/profile', RouterHelper.checkLoggedUser(), async (req, res) => {
+     *     this.get('/profile', routerHelper.checkLoggedUser(), async (req, res) => {
      *       res.json(req['user']);
      *     });
-     *   }
-     * }
-     *
-     * // Or use doUserCheck() in CommonRoutes
-     * class MyRoutes extends CommonRoutes {
-     *   protected doUserCheck(): boolean {
-     *     return true; // Adds checkLoggedUser() middleware automatically
      *   }
      * }
      * ```
@@ -358,5 +293,5 @@ class _RouterHelper {
 }
 
 // Create and export singleton instance
-const RouterHelper = new _RouterHelper();
-export default RouterHelper;
+const routerHelper = new RouterHelper();
+export default routerHelper;
