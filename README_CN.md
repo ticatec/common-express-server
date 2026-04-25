@@ -159,6 +159,61 @@ class AdminRoutes extends CommonRoutes {
 }
 ```
 
+#### 自定义用户验证
+
+`userCheck()` 方法允许你在认证之外实现自定义验证逻辑：
+
+```typescript
+import { CommonRoutes } from '@ticatec/common-express-server';
+
+class VerifiedUserRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return true; // 需要认证
+    }
+
+    // 验证用户账户状态
+    protected async userCheck(user: any): Promise<boolean> {
+        if (!user) {
+            return false;
+        }
+        // 检查用户账户是否激活
+        const account = await database.getAccount(user.accountCode);
+        return account && account.status === 'active';
+    }
+
+    protected bindRoutes() {
+        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+    }
+
+    private getProfile = async (req: Request) => {
+        return req['user'];
+    };
+}
+```
+
+**更多示例：**
+
+```typescript
+// 检查用户角色
+class AdminRoutes extends CommonRoutes {
+    protected userCheck(user: any): boolean {
+        return user && user.roles && user.roles.includes('admin');
+    }
+}
+
+// 租户验证
+class TenantRoutes extends CommonRoutes {
+    protected async userCheck(user: any): Promise<boolean> {
+        if (!user || !user.tenant) {
+            return false;
+        }
+        const tenant = await database.getTenant(user.tenant.code);
+        return tenant && tenant.isActive;
+    }
+}
+```
+
 #### 自定义认证中间件
 
 使用 `getGlobalHandler()` 添加自定义中间件：
@@ -320,6 +375,7 @@ RouterHelper.invokeController()    // 包装控制器处理器
 路由定义基类，具有：
 - Express 路由器集成
 - 灵活的认证控制
+- 自定义用户验证检查
 - 用户钩子支持
 - 全局中间件支持
 - 日志记录功能
@@ -329,13 +385,15 @@ RouterHelper.invokeController()    // 包装控制器处理器
 ```
 1. doUserCheck()           - 如果为 true 则 checkLoggedUser
 2. getUserHook()           - 处理并丰富用户数据
-3. getGlobalHandler()      - 自定义中间件
-4. bindRoutes()            - 路由定义
+3. userCheck()             - 自定义用户验证
+4. getGlobalHandler()      - 自定义中间件
+5. bindRoutes()            - 路由定义
 ```
 
 **关键方法：**
 - `doUserCheck(): boolean` - 启用/禁用认证
 - `getUserHook(): ((user: any) => any) | null` - 处理用户数据
+- `userCheck(user: any): boolean | Promise<boolean>` - 自定义用户验证
 - `getGlobalHandler(): RequestHandler | null` - 自定义中间件
 - `bindRoutes()` - 定义你的路由
 
@@ -371,8 +429,9 @@ RouterHelper.invokeController()    // 包装控制器处理器
 ├─────────────────────────────────────────────────────────────┤
 │ 1. doUserCheck()           - 如果为 true 则 checkLoggedUser  │
 │ 2. getUserHook()           - 处理用户数据                    │
-│ 3. getGlobalHandler()      - 自定义中间件                    │
-│ 4. bindRoutes()            - 路由定义                        │
+│ 3. userCheck()             - 自定义用户验证                  │
+│ 4. getGlobalHandler()      - 自定义中间件                    │
+│ 5. bindRoutes()            - 路由定义                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 

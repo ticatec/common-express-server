@@ -159,6 +159,61 @@ class AdminRoutes extends CommonRoutes {
 }
 ```
 
+#### Custom User Validation
+
+The `userCheck()` method allows you to implement custom validation logic beyond authentication:
+
+```typescript
+import { CommonRoutes } from '@ticatec/common-express-server';
+
+class VerifiedUserRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return true; // Require authentication
+    }
+
+    // Validate user account status
+    protected async userCheck(user: any): Promise<boolean> {
+        if (!user) {
+            return false;
+        }
+        // Check if user account is active
+        const account = await database.getAccount(user.accountCode);
+        return account && account.status === 'active';
+    }
+
+    protected bindRoutes() {
+        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+    }
+
+    private getProfile = async (req: Request) => {
+        return req['user'];
+    };
+}
+```
+
+**More examples:**
+
+```typescript
+// Check user roles
+class AdminRoutes extends CommonRoutes {
+    protected userCheck(user: any): boolean {
+        return user && user.roles && user.roles.includes('admin');
+    }
+}
+
+// Tenant validation
+class TenantRoutes extends CommonRoutes {
+    protected async userCheck(user: any): Promise<boolean> {
+        if (!user || !user.tenant) {
+            return false;
+        }
+        const tenant = await database.getTenant(user.tenant.code);
+        return tenant && tenant.isActive;
+    }
+}
+```
+
 #### Custom Authentication Middleware
 
 Use `getGlobalHandler()` to add custom middleware:
@@ -320,6 +375,7 @@ RouterHelper.invokeController()    // Wrap controller handlers
 Base class for route definitions with:
 - Express router integration
 - Flexible authentication control
+- Custom user validation checks
 - User hook support
 - Global middleware support
 - Logging capabilities
@@ -329,13 +385,15 @@ Base class for route definitions with:
 ```
 1. doUserCheck()           - checkLoggedUser() if true
 2. getUserHook()           - Process and enrich user data
-3. getGlobalHandler()      - Custom middleware
-4. bindRoutes()            - Route definitions
+3. userCheck()             - Custom user validation
+4. getGlobalHandler()      - Custom middleware
+5. bindRoutes()            - Route definitions
 ```
 
 **Key Methods:**
 - `doUserCheck(): boolean` - Enable/disable authentication
 - `getUserHook(): ((user: any) => any) | null` - Process user data
+- `userCheck(user: any): boolean | Promise<boolean>` - Custom user validation
 - `getGlobalHandler(): RequestHandler | null` - Custom middleware
 - `bindRoutes()` - Define your routes
 
@@ -371,8 +429,9 @@ Base class for route definitions with:
 ├─────────────────────────────────────────────────────────────┤
 │ 1. doUserCheck()           - checkLoggedUser() if true      │
 │ 2. getUserHook()           - Process user data             │
-│ 3. getGlobalHandler()      - Custom middleware              │
-│ 4. bindRoutes()            - Route definitions              │
+│ 3. userCheck()             - Custom user validation         │
+│ 4. getGlobalHandler()      - Custom middleware              │
+│ 5. bindRoutes()            - Route definitions              │
 └─────────────────────────────────────────────────────────────┘
 ```
 

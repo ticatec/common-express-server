@@ -2,20 +2,23 @@ import {Express, Request, Response, Router} from "express";
 import RouterHelper from "./RouterHelper";
 import log4js, {Logger} from "log4js";
 import {RequestHandler, NextFunction} from "express-serve-static-core";
+import {UnauthenticatedError} from "@ticatec/express-exception";
 
 /**
  * Abstract base class for defining common routes
  *
  * Provides a structured way to define routes with support for:
  * - User authentication checks
+ * - Custom user validation checks
  * - Custom user processing hooks
  * - Global middleware handlers
  *
  * The middleware execution order is:
  * 1. Authentication check (if `doUserCheck()` returns true)
  * 2. User hook processing (if `getUserHook()` returns a function)
- * 3. Global middleware (if `getGlobalHandler()` returns a handler)
- * 4. Route handlers (defined in `bindRoutes()`)
+ * 3. Custom user validation check (via `userCheck()`)
+ * 4. Global middleware (if `getGlobalHandler()` returns a handler)
+ * 5. Route handlers (defined in `bindRoutes()`)
  *
  * @example
  * ```typescript
@@ -32,6 +35,13 @@ import {RequestHandler, NextFunction} from "express-serve-static-core";
  *       user.preferences = await loadPreferences(user.accountCode);
  *       return user;
  *     };
+ *   }
+ *
+ *   // Custom user validation
+ *   protected async userCheck(user: any): Promise<boolean> {
+ *     // Check if user account is active
+ *     const account = await database.getAccount(user.accountCode);
+ *     return account && account.status === 'active';
  *   }
  *
  *   // Define routes
@@ -66,9 +76,10 @@ export default class CommonRoutes {
      * The binding process follows this order:
      * 1. If `doUserCheck()` returns true, adds default authentication middleware
      * 2. If `getUserHook()` returns a function, adds user hook middleware (with error handling)
-     * 3. If `getGlobalHandler()` returns a handler, adds global middleware
-     * 4. Calls `bindRoutes()` to register route definitions
-     * 5. Mounts the router to the Express app at the specified path
+     * 3. Adds custom user validation middleware (via `userCheck()`)
+     * 4. If `getGlobalHandler()` returns a handler, adds global middleware
+     * 5. Calls `bindRoutes()` to register route definitions
+     * 6. Mounts the router to the Express app at the specified path
      *
      * @param app Express application instance
      * @param path The route path to bind this router to
@@ -92,6 +103,20 @@ export default class CommonRoutes {
                 }
             });
         }
+        this.router.use(async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                let user = req['user'];
+                if (!await this.userCheck(user?.actAs ?? user)) {
+                    this.logger.debug(`User check failed: ${user}`);
+                    next(new UnauthenticatedError());
+                } else {
+                    next();
+                }
+            } catch (error) {
+                next(error);
+            }
+
+        });
         let globalHandler = this.getGlobalHandler();
         if (globalHandler) {
             this.logger.info('Setting global handler middleware');
@@ -100,6 +125,64 @@ export default class CommonRoutes {
         this.bindRoutes();
         app.use(path, this.router);
         this.logger.info(`Router bound successfully to path: ${path}`);
+    }
+
+    /**
+     * Performs custom user validation check
+     *
+     * Override this method to implement custom user validation logic.
+     * This method is called after the user hook (if any) and before the global middleware.
+     * It receives the user object (or the actAs user if impersonation is active) and
+     * should return true if the user is valid, or false/throw an error otherwise.
+     *
+     * When this method returns false, an UnauthenticatedError is thrown automatically.
+     * If an error is thrown, it will be passed to Express's error handling middleware.
+     *
+     * This is useful for:
+     * - Additional authorization checks beyond authentication
+     * - Validating user permissions or roles
+     * - Checking account status (e.g., active, suspended)
+     * - Tenant-specific validation
+     * - Custom business rules for user access
+     *
+     * @param user The user object to validate (will be user.actAs if impersonation is active)
+     * @returns true if the user passes validation, false otherwise
+     * @protected
+     *
+     * @example
+     * ```typescript
+     * // Check if user account is active
+     * protected async userCheck(user: any): Promise<boolean> {
+     *   if (!user) {
+     *     return false;
+     *   }
+     *   const account = await database.getAccount(user.accountCode);
+     *   return account && account.status === 'active';
+     * }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Check if user has required role
+     * protected userCheck(user: any): boolean {
+     *   return user && user.roles && user.roles.includes('admin');
+     * }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Check tenant-specific access
+     * protected async userCheck(user: any): Promise<boolean> {
+     *   if (!user || !user.tenant) {
+     *     return false;
+     *   }
+     *   const tenant = await database.getTenant(user.tenant.code);
+     *   return tenant && tenant.isActive;
+     * }
+     * ```
+     */
+    protected userCheck(user: any): boolean | Promise<boolean> {
+        return true;
     }
 
     /**
