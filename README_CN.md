@@ -7,7 +7,6 @@
 
 [English](./README.md) ｜ 中文
 
-
 ## 特性
 
 - 🚀 **Express.js 基础**: 基于 Express.js 5.x 构建，完全支持 TypeScript
@@ -19,6 +18,7 @@
 - 🌐 **国际化**: 通过请求头内置语言支持
 - 📊 **日志记录**: 与 log4js 集成的结构化日志
 - 🎨 **TypeScript 优先**: 完整的 TypeScript 支持和全面的类型定义
+- 🎁 **零配置**: 单例模式工具类，无需继承
 
 ## 文档
 
@@ -41,17 +41,20 @@ npm install express@^5.1.0
 ### 1. 创建基础服务器
 
 ```typescript
-import { BaseServer, CommonRouterHelper } from '@ticatec/common-express-server';
+import { BaseServer, RouterHelper } from '@ticatec/common-express-server';
 
-class MyRouterHelper extends CommonRouterHelper {
-    // 根据需要添加自定义中间件或重写方法
-}
+// 可选：设置自定义用户处理钩子
+RouterHelper.setHandleLoggedUserHook(async (user) => {
+    // 从数据库加载额外的用户数据
+    const userData = await database.getUserById(user.accountCode);
+    return {
+        ...user,
+        profile: userData.profile,
+        permissions: await database.getUserPermissions(user.accountCode)
+    };
+});
 
-class MyServer extends BaseServer<MyRouterHelper> {
-    protected getHelper(): MyRouterHelper {
-        return new MyRouterHelper();
-    }
-
+class MyServer extends BaseServer {
     protected async loadConfigFile(): Promise<void> {
         // 在此处加载你的配置
         console.log('正在加载配置...');
@@ -65,9 +68,9 @@ class MyServer extends BaseServer<MyRouterHelper> {
         };
     }
 
-    protected async setupRoutes(app: Express): Promise<void> {
+    protected async setupRoutes(): Promise<void> {
         // 在此处设置你的路由
-        await this.bindRoutes(app, '/users', () => import('./routes/UserRoutes'));
+        await this.bindRoutes('/users', () => import('./routes/UserRoutes'));
     }
 }
 
@@ -76,46 +79,30 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
-#### 扩展用户处理
-
-你可以扩展 `CommonRouterHelper` 来为登录用户添加自定义处理：
-
-```typescript
-import { CommonRouterHelper } from '@ticatec/common-express-server';
-import LoggedUser from '@ticatec/common-express-server/LoggedUser';
-
-class CustomRouterHelper extends CommonRouterHelper {
-    /**
-     * 重写以添加自定义用户处理
-     */
-    protected async handleLoggedUser(user: LoggedUser): Promise<LoggedUser> {
-        // 从数据库加载额外的用户数据
-        const userData = await this.database.getUserById(user.accountCode);
-
-        // 添加自定义权限
-        const permissions = await this.database.getUserPermissions(user.accountCode);
-
-        // 丰富用户对象
-        return {
-            ...user,
-            profile: userData.profile,
-            permissions: permissions,
-            lastLogin: userData.lastLogin
-        };
-    }
-}
-```
-
 ### 2. 创建路由
 
 ```typescript
-import { CommonRouter, CommonRouterHelper } from '@ticatec/common-express-server';
+import { CommonRoutes, RouterHelper } from '@ticatec/common-express-server';
 
-class UserRoutes extends CommonRouter<CommonRouterHelper> {
+class UserRoutes extends CommonRoutes {
+
+    // 启用默认用户认证
+    protected doUserCheck(): boolean {
+        return true;
+    }
+
+    // 加载额外的用户数据
+    protected getUserHook(): ((user: any) => any) | null {
+        return async (user) => {
+            // 加载用户偏好设置
+            user.preferences = await loadPreferences(user.accountCode);
+            return user;
+        };
+    }
 
     protected bindRoutes() {
-        this.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
-        this.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
+        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+        this.post('/update', RouterHelper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -132,42 +119,92 @@ class UserRoutes extends CommonRouter<CommonRouterHelper> {
 export default UserRoutes;
 ```
 
-#### 自定义用户认证
+#### 自定义用户钩子
 
-你可以重写 `getGlobalHandler()` 方法来提供自定义认证：
+`getUserHook()` 方法允许你在认证后处理和丰富用户数据：
 
 ```typescript
-import { CommonRouter, CommonRouterHelper, CustomChecker } from '@ticatec/common-express-server';
+import { CommonRoutes } from '@ticatec/common-express-server';
 
-class AdminRoutes extends CommonRouter<CommonRouterHelper> {
+class AdminRoutes extends CommonRoutes {
 
-    // 自定义认证检查
-    protected getGlobalHandler(): boolean | CustomChecker {
-        // 自定义认证逻辑
-        return (req: Request): boolean => {
-            const userRole = req.headers['user-role'];
-            return userRole === 'admin' || userRole === 'moderator';
+    protected doUserCheck(): boolean {
+        return true; // 需要认证
+    }
+
+    // 处理并丰富用户数据
+    protected getUserHook(): ((user: any) => any) | null {
+        return async (user) => {
+            if (user) {
+                // 加载管理员特定数据
+                user.adminData = await loadAdminData(user.accountCode);
+                user.permissions = await loadPermissions(user.accountCode);
+                user.settings = await loadSettings(user.accountCode);
+            }
+            return user;
         };
     }
 
     protected bindRoutes() {
-        this.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+        this.get('/dashboard', RouterHelper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
-        return { message: '管理员仪表板' };
+        // 用户数据已经被丰富
+        return {
+            dashboard: req['user'].adminData,
+            permissions: req['user'].permissions
+        };
     };
 }
+```
 
-// 完全跳过认证
-class PublicRoutes extends CommonRouter<CommonRouterHelper> {
+#### 自定义认证中间件
 
-    protected getGlobalHandler(): boolean | CustomChecker {
-        return false; // 不进行认证检查
+使用 `getGlobalHandler()` 添加自定义中间件：
+
+```typescript
+import { CommonRoutes } from '@ticatec/common-express-server';
+
+class ApiRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return true;
+    }
+
+    // 添加自定义全局中间件
+    protected getGlobalHandler(): RequestHandler | null {
+        return async (req, res, next) => {
+            // 检查 API 版本
+            const version = req.headers['api-version'];
+            if (!version) {
+                throw new Error('需要 API 版本');
+            }
+            next();
+        };
     }
 
     protected bindRoutes() {
-        this.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+        this.get('/data', RouterHelper.invokeRestfulAction(this.getData));
+    }
+
+    private getData = async (req: Request) => {
+        return { data: [] };
+    };
+}
+```
+
+#### 公开路由（无需认证）
+
+```typescript
+class PublicRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return false; // 不需要认证
+    }
+
+    protected bindRoutes() {
+        this.get('/info', RouterHelper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -175,11 +212,6 @@ class PublicRoutes extends CommonRouter<CommonRouterHelper> {
     };
 }
 ```
-
-`getGlobalHandler()` 方法可以返回：
-- `true`（默认）: 使用默认的 `helper.checkLoggedUser()` 中间件
-- `false`: 完全跳过用户认证
-- `CustomChecker` 函数: 自定义函数 `(req: Request) => boolean`，认证通过时返回 true
 
 ### 3. 创建控制器
 
@@ -218,7 +250,7 @@ class UserController extends TenantBaseController<UserService> {
             const query = req.query;
             this.checkInterface('search');
             return await this.invokeServiceInterface('search', [
-                this.getLoggedUser(req), 
+                this.getLoggedUser(req),
                 query
             ]);
         };
@@ -228,7 +260,7 @@ class UserController extends TenantBaseController<UserService> {
 
 ## 核心类
 
-### BaseServer<T>
+### BaseServer
 
 抽象基础服务器类，提供：
 - Express 应用程序设置
@@ -237,8 +269,24 @@ class UserController extends TenantBaseController<UserService> {
 - 错误处理
 - 健康检查端点
 - 静态文件服务
+- **全局用户解析**（非侵入式，适用于所有请求）
 
-### CommonRouterHelper
+**主要特性：**
+- 无需泛型参数
+- 不需要 `getHelper()` 方法
+- 使用单例 `RouterHelper` 工具类
+
+**全局中间件顺序：**
+```
+1. SetNoCache              - 禁用缓存
+2. HealthCheck             - /health-check 端点
+3. RetrieveUser (全局)     - 从请求头解析用户信息（非侵入式）
+4. Routes                  - 所有路由定义
+5. ActionNotFound          - 404 处理器
+6. Error Handler           - 错误处理
+```
+
+### RouterHelper（单例）
 
 中间件工具，用于：
 - JSON 响应格式化
@@ -246,14 +294,50 @@ class UserController extends TenantBaseController<UserService> {
 - 用户认证
 - 错误处理
 - 请求日志记录
+- 自定义用户处理钩子
 
-### CommonRouter<T>
+**使用方法：**
+```typescript
+import { RouterHelper } from '@ticatec/common-express-server';
+
+// 设置自定义用户处理钩子
+RouterHelper.setHandleLoggedUserHook(async (user) => {
+    // 自定义用户处理
+    return user;
+});
+
+// 使用中间件
+RouterHelper.setNoCache           // 禁用缓存
+RouterHelper.checkLoggedUser()    // 要求认证
+RouterHelper.retrieveUser()       // 解析用户（非侵入式）
+RouterHelper.actionNotFound()     // 404 处理器
+RouterHelper.invokeRestfulAction() // 包装异步处理器
+RouterHelper.invokeController()    // 包装控制器处理器
+```
+
+### CommonRoutes
 
 路由定义基类，具有：
 - Express 路由器集成
-- 用户认证检查
+- 灵活的认证控制
+- 用户钩子支持
+- 全局中间件支持
 - 日志记录功能
-- 内置的CRUD辅助方法（get、post、put、delete）
+- 内置的 HTTP 方法辅助方法
+
+**中间件执行顺序：**
+```
+1. doUserCheck()           - 如果为 true 则 checkLoggedUser
+2. getUserHook()           - 处理并丰富用户数据
+3. getGlobalHandler()      - 自定义中间件
+4. bindRoutes()            - 路由定义
+```
+
+**关键方法：**
+- `doUserCheck(): boolean` - 启用/禁用认证
+- `getUserHook(): ((user: any) => any) | null` - 处理用户数据
+- `getGlobalHandler(): RequestHandler | null` - 自定义中间件
+- `bindRoutes()` - 定义你的路由
 
 ### 控制器层次结构
 
@@ -266,9 +350,35 @@ class UserController extends TenantBaseController<UserService> {
 
 📚 **[完整控制器使用指南 →](./CONTROLLER_CN.md)**
 
-## 配置
+## 架构概览
 
-### 应用程序配置
+### 请求处理流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    BaseServer 中间件                        │
+├─────────────────────────────────────────────────────────────┤
+│ 1. SetNoCache              - 禁用缓存                        │
+│ 2. HealthCheck             - /health-check 端点              │
+│ 3. RetrieveUser (全局)     - 从请求头解析用户信息            │
+│ 4. Routes                  - 所有路由定义                    │
+│ 5. ActionNotFound          - 404 处理器                      │
+│ 6. Error Handler           - 错误处理                        │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              CommonRoutes 中间件执行顺序                     │
+├─────────────────────────────────────────────────────────────┤
+│ 1. doUserCheck()           - 如果为 true 则 checkLoggedUser  │
+│ 2. getUserHook()           - 处理用户数据                    │
+│ 3. getGlobalHandler()      - 自定义中间件                    │
+│ 4. bindRoutes()            - 路由定义                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 配置
+
+#### 应用程序配置
 
 ```typescript
 import { AppConf } from '@ticatec/common-express-server';
@@ -290,11 +400,11 @@ const dbHost = config.get('database.host');
 const serverPort = config.get('server.port');
 ```
 
-### 网关架构
+#### 网关架构
 
 此应用程序设计为在 API 网关后工作。网关处理 JWT 令牌或基于会话的身份验证，并通过 HTTP 请求头将经过身份验证的用户信息转发给 Express 应用程序。
 
-#### 架构流程
+##### 架构流程
 
 ```
 客户端请求 (JWT/Session) → API 网关 → Express 应用程序
@@ -302,7 +412,7 @@ const serverPort = config.get('server.port');
                         用户信息请求头
 ```
 
-#### 网关职责
+##### 网关职责
 
 API 网关应该：
 
@@ -311,7 +421,7 @@ API 网关应该：
 3. **转发用户数据** 作为 HTTP 请求头传递给 Express 应用程序
 4. **处理授权** 和速率限制等需求
 
-#### 用户认证请求头
+##### 用户认证请求头
 
 库期望用户信息在请求头中：
 
@@ -327,50 +437,9 @@ API 网关应该：
 }
 ```
 
-#### 网关实现示例
-
-以下是网关如何处理身份验证的示例：
-
-```typescript
-// 网关中间件 (伪代码)
-async function processAuthentication(request) {
-    // 1. 验证 JWT 令牌或会话
-    const token = request.headers.authorization?.replace('Bearer ', '');
-    const userInfo = await validateJWT(token);
-    
-    // 2. 提取用户信息
-    const user = {
-        accountCode: userInfo.sub,
-        name: userInfo.name,
-        tenant: {
-            code: userInfo.tenant_code,
-            name: userInfo.tenant_name
-        }
-    };
-    
-    // 3. 转发到 Express 应用程序并携带用户头信息
-    request.headers['user'] = encodeURIComponent(JSON.stringify(user));
-    request.headers['x-language'] = userInfo.preferred_language || 'zh';
-    
-    // 4. 代理请求到 Express 应用程序
-    return proxyToExpressApp(request);
-}
-```
-
-#### 安全考虑
-
-- **无直接身份验证**: 此 Express 应用程序不处理 JWT 验证或会话管理
-- **信任边界**: 应用程序信任网关已正确验证用户身份
-- **请求头验证**: 用户头信息被解析和验证但不进行身份验证
-- **网络安全**: 确保网关和 Express 应用程序之间的安全通信（内部网络/VPN）
-
-### 用户扮演
+#### 用户扮演
 
 库支持用户扮演功能，允许系统特权用户扮演成另外一个用户（包括跨租户操作）来实现错误跟踪和故障排除。
-
-#### 工作原理
-
-当特权用户需要扮演另一个用户时，网关应该在请求头中同时包含原始用户和目标用户信息：
 
 ```typescript
 // 包含用户扮演的请求头
@@ -380,7 +449,7 @@ async function processAuthentication(request) {
         accountCode: 'admin123',
         name: '系统管理员',
         tenant: { code: 'system', name: '系统租户' },
-        
+
         // 被扮演的用户
         actAs: {
             accountCode: 'user456',
@@ -391,52 +460,6 @@ async function processAuthentication(request) {
     'x-language': 'zh'
 }
 ```
-
-#### 在控制器中的实现
-
-`BaseController.getLoggedUser()` 方法自动处理用户扮演：
-
-```typescript
-class MyController extends TenantBaseController<MyService> {
-    
-    async getUserData(req: Request) {
-        // 如果存在 actAs，将返回被扮演的用户，
-        // 否则返回原始用户
-        const currentUser = this.getLoggedUser(req);
-        
-        console.log('当前操作用户:', currentUser.name);
-        console.log('租户上下文:', currentUser.tenant.code);
-        
-        // 所有操作将在被扮演用户的上下文中执行
-        return await this.service.getUserData(currentUser);
-    }
-}
-```
-
-
-#### 使用场景
-
-- **调试用户问题**: 支持人员可以通过扮演受影响的用户来重现问题
-- **跨租户故障排除**: 系统管理员可以跨不同租户调试问题
-- **测试用户权限**: 验证用户特定的访问控制是否正常工作
-- **数据迁移**: 在系统迁移期间代表用户执行操作
-
-#### Express 应用程序职责
-
-Express 应用程序只需要：
-- **信任网关**: 接受来自已认证网关请求的用户扮演信息
-- **处理上下文**: 当存在 `actAs` 时，使用被扮演用户进行所有业务操作
-- **无需验证**: 不验证扮演权限或限制
-
-#### 网关对扮演功能的职责
-
-所有扮演控制应由网关处理：
-- **权限验证**: 验证用户是否有权限扮演其他用户
-- **审计日志**: 记录所有扮演活动以供安全审计
-- **时间限制**: 实施对扮演会话的基于时间的限制
-- **会话管理**: 处理扮演会话的生命周期
-- **跨租户控制**: 对跨租户扮演应用额外检查
-- **通知机制**: 可选择在用户帐户被扮演时通知目标用户
 
 ## 多租户支持
 
@@ -486,10 +509,10 @@ class UserController extends CommonController<UserService> {
 使用 `@ticatec/express-exception` 进行集中式错误处理：
 
 ```typescript
-import { 
-    ActionNotFoundError, 
-    UnauthenticatedError, 
-    IllegalParameterError 
+import {
+    ActionNotFoundError,
+    UnauthenticatedError,
+    IllegalParameterError
 } from '@ticatec/express-exception';
 
 // 错误会自动处理和格式化
@@ -507,9 +530,7 @@ throw new IllegalParameterError('输入数据无效');
 export type RestfulFunction = (req: Request) => any;
 export type ControlFunction = (req: Request, res: Response) => any;
 export type moduleLoader = () => Promise<any>;
-
-// 验证类型（来自 @ticatec/bean-validator）
-export type ValidationRules = Array<BaseValidator>;
+export type HandleLoggedUserHook = (user: LoggedUser) => Promise<LoggedUser>;
 
 // 用户接口
 export interface CommonUser {

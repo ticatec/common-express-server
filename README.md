@@ -18,6 +18,7 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 - 🌐 **Internationalization**: Built-in language support via headers
 - 📊 **Logging**: Structured logging with log4js integration
 - 🎨 **TypeScript First**: Full TypeScript support with comprehensive type definitions
+- 🎁 **Zero Configuration**: Singleton pattern utilities, no inheritance needed
 
 ## Documentation
 
@@ -40,17 +41,20 @@ npm install express@^5.1.0
 ### 1. Create a Basic Server
 
 ```typescript
-import { BaseServer, CommonRouterHelper } from '@ticatec/common-express-server';
+import { BaseServer, RouterHelper } from '@ticatec/common-express-server';
 
-class MyRouterHelper extends CommonRouterHelper {
-    // Add custom middleware or override methods as needed
-}
+// Optional: Set up custom user processing hook
+RouterHelper.setHandleLoggedUserHook(async (user) => {
+    // Load additional user data from database
+    const userData = await database.getUserById(user.accountCode);
+    return {
+        ...user,
+        profile: userData.profile,
+        permissions: await database.getUserPermissions(user.accountCode)
+    };
+});
 
-class MyServer extends BaseServer<MyRouterHelper> {
-    protected getHelper(): MyRouterHelper {
-        return new MyRouterHelper();
-    }
-
+class MyServer extends BaseServer {
     protected async loadConfigFile(): Promise<void> {
         // Load your configuration here
         console.log('Loading configuration...');
@@ -64,9 +68,9 @@ class MyServer extends BaseServer<MyRouterHelper> {
         };
     }
 
-    protected async setupRoutes(app: Express): Promise<void> {
+    protected async setupRoutes(): Promise<void> {
         // Set up your routes here
-        await this.bindRoutes(app, '/users', () => import('./routes/UserRoutes'));
+        await this.bindRoutes('/users', () => import('./routes/UserRoutes'));
     }
 }
 
@@ -75,46 +79,30 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
-#### Extending User Processing
-
-You can extend `CommonRouterHelper` to add custom processing for logged users:
-
-```typescript
-import { CommonRouterHelper } from '@ticatec/common-express-server';
-import LoggedUser from '@ticatec/common-express-server/LoggedUser';
-
-class CustomRouterHelper extends CommonRouterHelper {
-    /**
-     * Override to add custom user processing
-     */
-    protected async handleLoggedUser(user: LoggedUser): Promise<LoggedUser> {
-        // Load additional user data from database
-        const userData = await this.database.getUserById(user.accountCode);
-
-        // Add custom permissions
-        const permissions = await this.database.getUserPermissions(user.accountCode);
-
-        // Enrich user object
-        return {
-            ...user,
-            profile: userData.profile,
-            permissions: permissions,
-            lastLogin: userData.lastLogin
-        };
-    }
-}
-```
-
 ### 2. Create Routes
 
 ```typescript
-import { CommonRouter, CommonRouterHelper } from '@ticatec/common-express-server';
+import { CommonRoutes, RouterHelper } from '@ticatec/common-express-server';
 
-class UserRoutes extends CommonRouter<CommonRouterHelper> {
+class UserRoutes extends CommonRoutes {
+
+    // Enable default user authentication
+    protected doUserCheck(): boolean {
+        return true;
+    }
+
+    // Load additional user data
+    protected getUserHook(): ((user: any) => any) | null {
+        return async (user) => {
+            // Load user preferences
+            user.preferences = await loadPreferences(user.accountCode);
+            return user;
+        };
+    }
 
     protected bindRoutes() {
-        this.get('/profile', this.helper.invokeRestfulAction(this.getProfile));
-        this.post('/update', this.helper.invokeRestfulAction(this.updateProfile));
+        this.get('/profile', RouterHelper.invokeRestfulAction(this.getProfile));
+        this.post('/update', RouterHelper.invokeRestfulAction(this.updateProfile));
     }
 
     private getProfile = async (req: Request) => {
@@ -131,42 +119,92 @@ class UserRoutes extends CommonRouter<CommonRouterHelper> {
 export default UserRoutes;
 ```
 
-#### Custom User Authentication
+#### Custom User Hook
 
-You can override the `getGlobalHandler()` method to provide custom authentication:
+The `getUserHook()` method allows you to process and enrich user data after authentication:
 
 ```typescript
-import { CommonRouter, CommonRouterHelper, CustomChecker } from '@ticatec/common-express-server';
+import { CommonRoutes } from '@ticatec/common-express-server';
 
-class AdminRoutes extends CommonRouter<CommonRouterHelper> {
+class AdminRoutes extends CommonRoutes {
 
-    // Custom authentication check
-    protected getGlobalHandler(): boolean | CustomChecker {
-        // Custom authentication logic
-        return (req: Request): boolean => {
-            const userRole = req.headers['user-role'];
-            return userRole === 'admin' || userRole === 'moderator';
+    protected doUserCheck(): boolean {
+        return true; // Require authentication
+    }
+
+    // Process and enrich user data
+    protected getUserHook(): ((user: any) => any) | null {
+        return async (user) => {
+            if (user) {
+                // Load admin-specific data
+                user.adminData = await loadAdminData(user.accountCode);
+                user.permissions = await loadPermissions(user.accountCode);
+                user.settings = await loadSettings(user.accountCode);
+            }
+            return user;
         };
     }
 
     protected bindRoutes() {
-        this.get('/dashboard', this.helper.invokeRestfulAction(this.getDashboard));
+        this.get('/dashboard', RouterHelper.invokeRestfulAction(this.getDashboard));
     }
 
     private getDashboard = async (req: Request) => {
-        return { message: 'Admin dashboard' };
+        // User data is already enriched here
+        return {
+            dashboard: req['user'].adminData,
+            permissions: req['user'].permissions
+        };
     };
 }
+```
 
-// Skip authentication entirely
-class PublicRoutes extends CommonRouter<CommonRouterHelper> {
+#### Custom Authentication Middleware
 
-    protected getGlobalHandler(): boolean | CustomChecker {
-        return false; // No authentication check
+Use `getGlobalHandler()` to add custom middleware:
+
+```typescript
+import { CommonRoutes } from '@ticatec/common-express-server';
+
+class ApiRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return true;
+    }
+
+    // Add custom global middleware
+    protected getGlobalHandler(): RequestHandler | null {
+        return async (req, res, next) => {
+            // Check API version
+            const version = req.headers['api-version'];
+            if (!version) {
+                throw new Error('API version is required');
+            }
+            next();
+        };
     }
 
     protected bindRoutes() {
-        this.get('/info', this.helper.invokeRestfulAction(this.getInfo));
+        this.get('/data', RouterHelper.invokeRestfulAction(this.getData));
+    }
+
+    private getData = async (req: Request) => {
+        return { data: [] };
+    };
+}
+```
+
+#### Public Routes (No Authentication)
+
+```typescript
+class PublicRoutes extends CommonRoutes {
+
+    protected doUserCheck(): boolean {
+        return false; // No authentication required
+    }
+
+    protected bindRoutes() {
+        this.get('/info', RouterHelper.invokeRestfulAction(this.getInfo));
     }
 
     private getInfo = async (req: Request) => {
@@ -174,11 +212,6 @@ class PublicRoutes extends CommonRouter<CommonRouterHelper> {
     };
 }
 ```
-
-The `getGlobalHandler()` method can return:
-- `true` (default): Uses the default `helper.checkLoggedUser()` middleware
-- `false`: Skips user authentication entirely
-- `CustomChecker` function: A custom function `(req: Request) => boolean` that returns true if authenticated
 
 ### 3. Create Controllers
 
@@ -217,7 +250,7 @@ class UserController extends TenantBaseController<UserService> {
             const query = req.query;
             this.checkInterface('search');
             return await this.invokeServiceInterface('search', [
-                this.getLoggedUser(req), 
+                this.getLoggedUser(req),
                 query
             ]);
         };
@@ -227,7 +260,7 @@ class UserController extends TenantBaseController<UserService> {
 
 ## Core Classes
 
-### BaseServer<T>
+### BaseServer
 
 Abstract base server class that provides:
 - Express application setup
@@ -236,8 +269,24 @@ Abstract base server class that provides:
 - Error handling
 - Health check endpoint
 - Static file serving
+- **Global user parsing** (non-invasive, for all requests)
 
-### CommonRouterHelper
+**Key Features:**
+- No generic parameters needed
+- No `getHelper()` method required
+- Uses singleton `RouterHelper` for utilities
+
+**Global Middleware Order:**
+```
+1. SetNoCache              - Disable caching
+2. HealthCheck             - /health-check endpoint
+3. RetrieveUser (Global)   - Parse user from headers (non-invasive)
+4. Routes                  - All route definitions
+5. ActionNotFound          - 404 handler
+6. Error Handler           - Error handling
+```
+
+### RouterHelper (Singleton)
 
 Middleware utilities for:
 - JSON response formatting
@@ -245,14 +294,50 @@ Middleware utilities for:
 - User authentication
 - Error handling
 - Request logging
+- Custom user processing hooks
 
-### CommonRouter<T>
+**Usage:**
+```typescript
+import { RouterHelper } from '@ticatec/common-express-server';
+
+// Set custom user processing hook
+RouterHelper.setHandleLoggedUserHook(async (user) => {
+    // Custom user processing
+    return user;
+});
+
+// Use middleware
+RouterHelper.setNoCache           // Disable caching
+RouterHelper.checkLoggedUser()    // Require authentication
+RouterHelper.retrieveUser()       // Parse user (non-invasive)
+RouterHelper.actionNotFound()     // 404 handler
+RouterHelper.invokeRestfulAction() // Wrap async handlers
+RouterHelper.invokeController()    // Wrap controller handlers
+```
+
+### CommonRoutes
 
 Base class for route definitions with:
 - Express router integration
-- User authentication checks
+- Flexible authentication control
+- User hook support
+- Global middleware support
 - Logging capabilities
-- Built-in CRUD helper methods (get, post, put, delete)
+- Built-in HTTP method helpers
+
+**Middleware Order:**
+```
+1. doUserCheck()           - checkLoggedUser() if true
+2. getUserHook()           - Process and enrich user data
+3. getGlobalHandler()      - Custom middleware
+4. bindRoutes()            - Route definitions
+```
+
+**Key Methods:**
+- `doUserCheck(): boolean` - Enable/disable authentication
+- `getUserHook(): ((user: any) => any) | null` - Process user data
+- `getGlobalHandler(): RequestHandler | null` - Custom middleware
+- `bindRoutes()` - Define your routes
 
 ### Controllers Hierarchy
 
@@ -265,9 +350,35 @@ Base class for route definitions with:
 
 📚 **[Complete Controller Guide →](./CONTROLLER.md)**
 
-## Configuration
+## Architecture Overview
 
-### Application Configuration
+### Request Processing Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    BaseServer Middleware                    │
+├─────────────────────────────────────────────────────────────┤
+│ 1. SetNoCache              - Disable caching                │
+│ 2. HealthCheck             - /health-check endpoint         │
+│ 3. RetrieveUser (Global)   - Parse user from headers        │
+│ 4. Routes                  - All route definitions          │
+│ 5. ActionNotFound          - 404 handler                    │
+│ 6. Error Handler           - Error handling                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              CommonRoutes Middleware Order                   │
+├─────────────────────────────────────────────────────────────┤
+│ 1. doUserCheck()           - checkLoggedUser() if true      │
+│ 2. getUserHook()           - Process user data             │
+│ 3. getGlobalHandler()      - Custom middleware              │
+│ 4. bindRoutes()            - Route definitions              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+#### Application Configuration
 
 ```typescript
 import { AppConf } from '@ticatec/common-express-server';
@@ -289,11 +400,11 @@ const dbHost = config.get('database.host');
 const serverPort = config.get('server.port');
 ```
 
-### Gateway Architecture
+#### Gateway Architecture
 
 This application is designed to work behind an API Gateway. The gateway handles JWT tokens or session-based authentication and forwards the authenticated user information to the Express application via HTTP headers.
 
-#### Architecture Flow
+##### Architecture Flow
 
 ```
 Client Request (JWT/Session) → API Gateway → Express Application
@@ -301,7 +412,7 @@ Client Request (JWT/Session) → API Gateway → Express Application
                             User Info Headers
 ```
 
-#### Gateway Responsibilities
+##### Gateway Responsibilities
 
 The API Gateway should:
 
@@ -310,7 +421,7 @@ The API Gateway should:
 3. **Forward user data** as HTTP headers to the Express application
 4. **Handle authorization** and rate limiting as needed
 
-#### User Authentication Headers
+##### User Authentication Headers
 
 The library expects user information in the request headers:
 
@@ -326,50 +437,9 @@ The library expects user information in the request headers:
 }
 ```
 
-#### Gateway Implementation Example
+#### User Impersonation
 
-Here's an example of how the gateway might process authentication:
-
-```typescript
-// Gateway middleware (pseudo-code)
-async function processAuthentication(request) {
-    // 1. Validate JWT token or session
-    const token = request.headers.authorization?.replace('Bearer ', '');
-    const userInfo = await validateJWT(token);
-    
-    // 2. Extract user information
-    const user = {
-        accountCode: userInfo.sub,
-        name: userInfo.name,
-        tenant: {
-            code: userInfo.tenant_code,
-            name: userInfo.tenant_name
-        }
-    };
-    
-    // 3. Forward to Express app with user header
-    request.headers['user'] = encodeURIComponent(JSON.stringify(user));
-    request.headers['x-language'] = userInfo.preferred_language || 'en';
-    
-    // 4. Proxy request to Express application
-    return proxyToExpressApp(request);
-}
-```
-
-#### Security Considerations
-
-- **No direct authentication**: This Express application does NOT handle JWT validation or session management
-- **Trust boundary**: The application trusts that the gateway has properly authenticated users
-- **Header validation**: User headers are parsed and validated but not authenticated
-- **Network security**: Ensure secure communication between gateway and Express app (internal network/VPN)
-
-### User Impersonation
-
-The library supports user impersonation, which allows privileged system users to act as another user (including cross-tenant operations) for debugging and troubleshooting purposes.
-
-#### How It Works
-
-When a privileged user needs to impersonate another user, the gateway should include both the original user and the target user in the headers:
+The library supports user impersonation for debugging and troubleshooting:
 
 ```typescript
 // Headers with user impersonation
@@ -379,7 +449,7 @@ When a privileged user needs to impersonate another user, the gateway should inc
         accountCode: 'admin123',
         name: 'System Admin',
         tenant: { code: 'system', name: 'System Tenant' },
-        
+
         // User being impersonated
         actAs: {
             accountCode: 'user456',
@@ -390,52 +460,6 @@ When a privileged user needs to impersonate another user, the gateway should inc
     'x-language': 'en'
 }
 ```
-
-#### Implementation in Controllers
-
-The `BaseController.getLoggedUser()` method automatically handles impersonation:
-
-```typescript
-class MyController extends TenantBaseController<MyService> {
-    
-    async getUserData(req: Request) {
-        // This will return the impersonated user if actAs is present,
-        // otherwise returns the original user
-        const currentUser = this.getLoggedUser(req);
-        
-        console.log('Operating as:', currentUser.name);
-        console.log('Tenant context:', currentUser.tenant.code);
-        
-        // All operations will be performed in the context of the impersonated user
-        return await this.service.getUserData(currentUser);
-    }
-}
-```
-
-
-#### Use Cases
-
-- **Debug user issues**: Support staff can reproduce problems by acting as the affected user
-- **Cross-tenant troubleshooting**: System administrators can debug issues across different tenants
-- **Testing user permissions**: Verify that user-specific access controls work correctly
-- **Data migration**: Perform operations on behalf of users during system migrations
-
-#### Express Application Responsibilities
-
-The Express application simply:
-- **Trusts the gateway**: Accepts user impersonation information from authenticated gateway requests
-- **Processes context**: Uses the `actAs` user for all business operations when present
-- **No validation**: Does not validate impersonation privileges or restrictions
-
-#### Gateway Responsibilities for Impersonation
-
-All impersonation controls should be handled by the gateway:
-- **Privilege validation**: Verify users have permission to impersonate others
-- **Audit logging**: Record all impersonation activities for security auditing
-- **Time limits**: Implement time-based restrictions on impersonation sessions
-- **Session management**: Handle impersonation session lifecycle
-- **Cross-tenant controls**: Apply additional checks for cross-tenant impersonation
-- **Notification**: Optionally notify target users when their accounts are being impersonated
 
 ## Multi-tenant Support
 
@@ -485,10 +509,10 @@ class UserController extends CommonController<UserService> {
 Centralized error handling with `@ticatec/express-exception`:
 
 ```typescript
-import { 
-    ActionNotFoundError, 
-    UnauthenticatedError, 
-    IllegalParameterError 
+import {
+    ActionNotFoundError,
+    UnauthenticatedError,
+    IllegalParameterError
 } from '@ticatec/express-exception';
 
 // Errors are automatically handled and formatted
@@ -506,9 +530,7 @@ throw new IllegalParameterError('Invalid input data');
 export type RestfulFunction = (req: Request) => any;
 export type ControlFunction = (req: Request, res: Response) => any;
 export type moduleLoader = () => Promise<any>;
-
-// Validation types (from @ticatec/bean-validator)
-export type ValidationRules = Array<BaseValidator>;
+export type HandleLoggedUserHook = (user: LoggedUser) => Promise<LoggedUser>;
 
 // User interfaces
 export interface CommonUser {

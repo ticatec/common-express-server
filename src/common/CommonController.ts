@@ -2,7 +2,7 @@
 import {ActionNotFoundError, IllegalParameterError} from "@ticatec/express-exception";
 import BaseController from "./BaseController";
 import beanValidator, {ValidationRules} from "@ticatec/bean-validator";
-import {RestfulFunction} from "../CommonRouterHelper";
+import {RestfulFunction} from "../RouterHelper";
 import {Request} from "express";
 
 /**

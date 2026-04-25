@@ -4,7 +4,7 @@
 // Core classes
 import BaseServer from './BaseServer';
 
-export {default as CommonRouterHelper} from './CommonRouterHelper';
+export {default as RouterHelper} from './RouterHelper';
 export {default as CommonRoutes} from './CommonRoutes';
 export {default as AppConf} from './AppConf';
 
@@ -20,7 +20,7 @@ export { default as AdminSearchController } from './common/AdminSearchController
 export { default as TenantSearchController } from './common/TenantSearchController';
 
 // Types
-export type { RestfulFunction, ControlFunction } from './CommonRouterHelper';
+export type { RestfulFunction, ControlFunction, HandleLoggedUserHook } from './RouterHelper';
 export type { moduleLoader } from './BaseServer';
 
 export default BaseServer;

@@ -1,5 +1,5 @@
 import express, {Express, NextFunction, Request, Response} from 'express';
-import CommonRouterHelper from "./CommonRouterHelper";
+import RouterHelper from "./RouterHelper";
 import {handleError} from "@ticatec/express-exception";
 import fs from 'fs';
 import http from "http";
@@ -15,16 +15,15 @@ export type moduleLoader = () => Promise<any>;
 
 /**
  * Abstract base server class providing common functionality for Express servers
- * @template T The type of CommonRouterHelper this server uses
  */
-export default abstract class BaseServer<T extends CommonRouterHelper = CommonRouterHelper> {
+export default abstract class BaseServer {
 
     /** Logger instance for this server */
     protected logger: Logger;
-    /** Router helper instance */
-    protected helper: T;
     /** Context root path for the server */
     protected contextRoot: string;
+    protected app: Express;
+
 
     /**
      * Protected constructor for base server
@@ -33,14 +32,6 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
     protected constructor() {
         this.logger = log4js.getLogger(this.constructor.name);
     }
-
-    /**
-     * Gets the router helper instance for this server
-     * @returns RouterHelper instance
-     * @protected
-     * @abstract
-     */
-    protected abstract getHelper(): T;
 
     /**
      * Loads configuration file
@@ -75,7 +66,6 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
         await this.loadConfigFile();
         try {
             await this.beforeStart();
-            this.helper = this.getHelper();
             let webConf = this.getWebConf();
             this.logger.debug('Web configuration loaded', { port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot });
             this.writeCheckFile(webConf.port);
@@ -125,14 +115,13 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
 
     /**
      * Adds health check endpoint to the Express app
-     * @param app Express application instance
      * @protected
      */
-    protected addHealthCheck(app: Express) {
+    protected addHealthCheck() {
         let path = this.getHealthCheckPath();
         this.logger.debug('Loading system health check', path)
         if (path) {
-            app.get(path, (req: Request, res: Response) => {
+            this.app.get(path, (req: Request, res: Response) => {
                 res.send('')
             });
         }
@@ -147,12 +136,14 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
     protected async startWebServer(webConf: any): Promise<unknown> {
         let app = express();
         app.disable("x-powered-by");
-        app.use(this.helper.setNoCache);
-        this.addHealthCheck(app);
-        this.setupExpress(app);
-        await this.bindStaticSite(app);
-        await this.setupRoutes(app);
-        app.use(this.helper.actionNotFound());
+        app.use(RouterHelper.setNoCache);
+        this.app = app;
+        this.addHealthCheck();
+        this.setupExpress();
+        await this.bindStaticSite();
+        app.use(RouterHelper.retrieveUser());
+        await this.setupRoutes();
+        app.use(RouterHelper.actionNotFound());
         app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
             this.logger.debug("application error: ", err);
             handleError(err, req, res, next);
@@ -169,52 +160,47 @@ export default abstract class BaseServer<T extends CommonRouterHelper = CommonRo
 
     /**
      * Binds static site resources
-     * @param app Express application instance
      * @returns Promise that resolves when static binding is complete
      * @protected
      */
-    protected async bindStaticSite(app: Express) {
+    protected async bindStaticSite() {
 
     }
 
     /**
      * Initializes Express application
-     * @param app Express application instance
      * @protected
      */
-    protected setupExpress(app: Express): void {
+    protected setupExpress(): void {
 
     }
 
     /**
      * Binds a route to the Express application
-     * @param app Express application instance
      * @param path The route path
      * @param loader Module loader function that returns the route class
      * @returns Promise that resolves when route binding is complete
      * @protected
      */
-    protected async bindRoutes(app: Express, path: string, loader: moduleLoader): Promise<void> {
+    protected async bindRoutes(path: string, loader: moduleLoader): Promise<void> {
         let clazz: any = (await loader()).default;
-        let routes: CommonRoutes<T> = new clazz();
-        this.logger.debug(`Binding route to path: ${path}`);
-        routes.bind(app, this.helper, path);
+        let routes: CommonRoutes = new clazz();
+        await routes.bind(this.app, `${this.contextRoot}${path}`);
     }
 
     /**
      * Sets up routes for the application
-     * @param app Express application instance
      * @returns Promise that resolves when all routes are set up
      * @protected
      * @abstract
      */
-    protected abstract setupRoutes(app: Express): Promise<void>;
+    protected abstract setupRoutes(): Promise<void>;
 
     /**
      * Static method to start a server instance
      * @param server The server instance to start
      */
-    static startup(server: BaseServer<any>) {
+    static startup(server: BaseServer) {
         server.startup().then(() => {
 
         }).catch(ex => {
