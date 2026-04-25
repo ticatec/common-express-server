@@ -94,8 +94,8 @@
     "@types/node": "^22.8.6",
     "typescript": "^5.0.0",
     "@ticatec/bean-validator": "^0.2.0",
-    "@ticatec/express-exception": "^1.2.0",
-    "@ticatec/node-common-library": "^2.3.0",
+    "@ticatec/express-exception": "^1.2.1",
+    "@ticatec/node-common-library": "^2.4.0",
     "log4js": "^6.7.0"
   },
   "peerDependencies": {

@@ -2,6 +2,7 @@ import {Request} from "express";
 import TenantBaseController from "./TenantBaseController";
 import BaseController from "./BaseController";
 
+
 /**
  * Interface with search capabilities for tenant use
  * @template T The service type this controller depends on

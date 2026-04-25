@@ -1,5 +1,6 @@
 import log4js, {Logger} from "log4js";
-import {CommonUser, LoggedUser} from "../../lib";
+import {Request} from "express";
+import LoggedUser, {CommonUser} from "../LoggedUser";
 
 export default abstract class Controller {
 
