@@ -4,6 +4,7 @@ import BaseController from "./BaseController";
 import beanValidator, {ValidationRules} from "@ticatec/bean-validator";
 import {RestfulFunction} from "../RouterHelper";
 import {Request} from "express";
+import Controller from "./Controller";
 
 /**
  * Controller class that implements Create/Read/Update/Delete operations
@@ -36,7 +37,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
     protected validateEntity(data: any) {
         let result = beanValidator.validate(data, this.rules);
         if (!result.valid) {
-            BaseController.debugEnabled && this.logger.debug(`Invalid data: ${result.errorMessage}`);
+            Controller.debugEnabled && this.logger.debug(`Invalid data: ${result.errorMessage}`);
             throw new IllegalParameterError(result.errorMessage);
         }
     }
@@ -110,7 +111,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      */
     protected _createNew(req: Request): Promise<any> {
         let data:any = this.buildNewEntry(req);
-        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to create an entity`, data);
+        Controller.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to create an entity`, data);
         this.checkInterface('createNew');
         this.validateEntity(data);
         return this.invokeServiceInterface('createNew', this.getCreateNewArguments(req));
@@ -124,7 +125,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      */
     protected _update(req: Request): Promise<any> {
         let data:any = this.buildUpdatedEntry(req);
-        BaseController.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to update an entity`, data);
+        Controller.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to update an entity`, data);
         this.checkInterface('update');
         this.validateEntity(data);
         return this.invokeServiceInterface('update', this.getUpdateArguments(req));

@@ -1,6 +1,6 @@
 import {Request} from "express";
 import AdminBaseController from "./AdminBaseController";
-import BaseController from "./BaseController";
+import Controller from "./Controller";
 
 
 /**
@@ -16,7 +16,7 @@ export default abstract class AdminSearchController<T> extends AdminBaseControll
     search() {
         return (req:Request) => {
             let query = req.query;
-            BaseController.debugEnabled && this.logger.debug(`Path: ${req.path}, query by criteria:`, query);
+            Controller.debugEnabled && this.logger.debug(`Path: ${req.path}, query by criteria:`, query);
             return this.invokeServiceInterface('search', [query]);
         }
     }

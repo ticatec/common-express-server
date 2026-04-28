@@ -1,6 +1,3 @@
-
-import LoggedUser, {CommonUser} from "../LoggedUser";
-import {Request} from "express";
 import Controller from "./Controller";
 
 /**

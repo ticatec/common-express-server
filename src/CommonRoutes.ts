@@ -1,8 +1,8 @@
 import {Express, Request, Response, Router} from "express";
-import routerHelper from "./RouterHelper";
 import log4js, {Logger} from "log4js";
 import {RequestHandler, NextFunction} from "express-serve-static-core";
 import {UnauthenticatedError} from "@ticatec/express-exception";
+import LoggedUser, {CommonUser} from "./LoggedUser";
 
 /**
  * Abstract base class for defining common routes
@@ -97,7 +97,7 @@ export default class CommonRoutes {
         }
         this.router.use(async (req: Request, res: Response, next: NextFunction) => {
             try {
-                let user = req['user'];
+                let user = req['user'] as LoggedUser;
                 if (!await this.userCheck(user?.actAs ?? user)) {
                     this.logger.debug(`User check failed: ${user}`);
                     next(new UnauthenticatedError());
@@ -173,7 +173,7 @@ export default class CommonRoutes {
      * }
      * ```
      */
-    protected userCheck(user: any): boolean | Promise<boolean> {
+    protected userCheck(user: CommonUser): boolean | Promise<boolean> {
         return true;
     }
 
@@ -348,16 +348,22 @@ export default class CommonRoutes {
      * The hook function receives the user object (from `req['user']`) and returns a
      * processed user object. The returned value will replace `req['user']`.
      *
-     * This hook is executed after the global user parsing (in BaseServer) and before
-     * the custom user validation check. It is wrapped with automatic error handling -
-     * any errors thrown will be passed to Express's error handling middleware.
+     * This hook is executed in the middleware pipeline **before the user validation check**
+     * (via `userCheck()`). It is wrapped with automatic error handling - any errors thrown
+     * will be passed to Express's error handling middleware.
      *
-     * This is useful for:
+     * **Middleware execution order:**
+     * 1. User hook processing (if `getUserHook()` returns a function)
+     * 2. User validation check (via `userCheck()`)
+     * 3. Global handler middleware (if `getGlobalHandler()` returns a handler)
+     * 4. Route handlers (defined in `bindRoutes()`)
+     *
+     * This hook is useful for:
      * - Loading additional user-specific data from database
      * - Adding user permissions or roles
      * - Enriching user profile information
      * - Setting request context based on user
-     * - Custom logging based on user information
+     * - Preparing user data before validation
      *
      * @returns A function that processes the user object, or null if no hook is needed
      * @protected
@@ -367,7 +373,7 @@ export default class CommonRoutes {
      * protected getUserHook(): ((user: any) => any) | null {
      *   return async (user) => {
      *     if (user) {
-     *       // Load additional user data
+     *       // Load additional user data BEFORE validation
      *       user.preferences = await loadUserPreferences(user.accountCode);
      *       user.permissions = await loadUserPermissions(user.accountCode);
      *       user.profile = await loadUserProfile(user.accountCode);
@@ -379,12 +385,13 @@ export default class CommonRoutes {
      *
      * @example
      * ```typescript
-     * // Conditional processing
+     * // Load tenant-specific settings before userCheck validates them
      * protected getUserHook(): ((user: any) => any) | null {
      *   return async (user) => {
      *     if (user && user.tenant) {
-     *       // Load tenant-specific settings
+     *       // Enrich user object with tenant data
      *       user.tenantSettings = await loadTenantSettings(user.tenant.code);
+     *       user.tenant.isActive = user.tenantSettings.status === 'active';
      *     }
      *     return user;
      *   };

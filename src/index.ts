@@ -12,6 +12,7 @@ export {default as AppConf} from './AppConf';
 export { default as LoggedUser, CommonUser } from './LoggedUser';
 
 // Controllers
+export { default as Controller } from './common/Controller';
 export { default as BaseController } from './common/BaseController';
 export { default as CommonController } from './common/CommonController';
 export { default as AdminBaseController } from './common/AdminBaseController';
