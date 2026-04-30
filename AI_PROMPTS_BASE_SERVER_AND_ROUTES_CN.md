@@ -148,6 +148,17 @@ src/
 │   │   ├── IProductDao.ts               # 产品DAO接口
 │   │   ├── ProductDao.ts                # 产品DAO实现
 │   │   └── Product.ts                   # 产品实体/模型
+│   ├── order/                   # 订单管理模块（分层结构示例）
+│   │   ├── OrderRoutes.ts               # 订单路由定义
+│   │   ├── OrderController.ts           # 订单控制器实现
+│   │   ├── OrderService.ts              # 订单服务（业务逻辑）
+│   │   ├── IOrderDao.ts                 # 订单DAO接口
+│   │   ├── OrderDao.ts                  # 订单DAO实现
+│   │   ├── Order.ts                     # 订单实体/模型
+│   │   └── details/                     # 订单明细子模块（强耦合实体）
+│   │       ├── OrderDetail.ts           # 订单明细实体
+│   │       ├── IOrderDetailDao.ts       # 订单明细DAO接口
+│   │       └── OrderDetailDao.ts        # 订单明细DAO实现
 │   └── admin/                  # 管理员模块（所有文件平级）
 │       ├── AdminRoutes.ts               # 管理员路由
 │       ├── AdminController.ts           # 管理员控制器
@@ -164,6 +175,12 @@ src/
 └── types/                       # TypeScript类型定义
     └── index.ts
 ```
+
+**模块内分层说明**：
+- 对于强耦合实体（如订单/订单明细），可在模块内建立子目录
+- 子目录只包含该实体的 DAO 接口、DAO 实现和实体类
+- 路由、控制器、服务仍在顶层，统一管理主实体和子实体的业务逻辑
+- 适用场景：主从表关系、父子实体、聚合根模式
 
 架构要求：
 
