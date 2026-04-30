@@ -121,55 +121,112 @@
 
 ## Prompt 5: 完整的应用程序设置
 
-```
 请帮我创建一个完整的 Express 应用程序，使用 @ticatec/common-express-server 框架。要求如下：
 
-项目结构：
+项目结构（按业务模块分层）：
 ```
 src/
 ├── server/
-│   ├── MyServer.ts          # 主服务器类
-│   └── routes/
-│       ├── UserRoutes.ts    # 用户路由
-│       ├── ProductRoutes.ts # 产品路由
-│       └── AdminRoutes.ts   # 管理员路由
-├── services/
-│   ├── UserService.ts       # 用户服务
-│   └── ProductService.ts    # 产品服务
+│   ├── MyServer.ts              # 主服务器类
+│   └── index.ts                 # 服务器启动入口
+├── modules/
+│   ├── user/                    # 用户管理模块（所有文件平级）
+│   │   ├── UserRoutes.ts                # 用户路由定义
+│   │   ├── AdminUserRoutes.ts           # 用户管理路由（管理员）
+│   │   ├── UserController.ts            # 用户控制器实现
+│   │   ├── UserSearchController.ts      # 用户搜索控制器实现
+│   │   ├── UserService.ts               # 用户服务（业务逻辑）
+│   │   ├── IUserDao.ts                  # 用户DAO接口
+│   │   ├── UserDao.ts                   # 用户DAO实现（数据库操作）
+│   │   └── User.ts                      # 用户实体/模型
+│   ├── product/                 # 产品管理模块（所有文件平级）
+│   │   ├── ProductRoutes.ts             # 产品路由定义
+│   │   ├── TenantProductRoutes.ts       # 租户产品路由
+│   │   ├── ProductController.ts         # 产品控制器实现
+│   │   ├── ProductSearchController.ts   # 产品搜索控制器
+│   │   ├── ProductService.ts            # 产品服务（业务逻辑）
+│   │   ├── IProductDao.ts               # 产品DAO接口
+│   │   ├── ProductDao.ts                # 产品DAO实现
+│   │   └── Product.ts                   # 产品实体/模型
+│   └── admin/                  # 管理员模块（所有文件平级）
+│       ├── AdminRoutes.ts               # 管理员路由
+│       ├── AdminController.ts           # 管理员控制器
+│       ├── AdminService.ts              # 管理员服务（业务逻辑）
+│       ├── IAdminDao.ts                 # 管理员DAO接口
+│       ├── AdminDao.ts                  # 管理员DAO实现
+│       └── AdminStats.ts                # 管理统计实体
 ├── config/
-│   └── app.json             # 应用配置
-└── index.ts                 # 入口文件
+│   ├── app.json                 # 应用配置
+│   └── database.ts              # 数据库连接配置
+├── common/                      # 通用工具和中间件
+│   ├── validators.ts            # 验证器
+│   └── utils.ts                 # 工具函数
+└── types/                       # TypeScript类型定义
+    └── index.ts
 ```
 
-要求：
-1. MyServer 继承 BaseServer
+架构要求：
+
+1. **MyServer 继承 BaseServer**
    - 从 config/app.json 加载配置
-   - 初始化数据库连接
-   - 配置 CORS
-   - 绑定所有路由
-   - 启动服务器
+   - 初始化数据库连接池
+   - 配置 CORS、body-parser、helmet等中间件
+   - 绑定所有模块路由到对应的路径
+   - 启动服务器并监听端口
 
-2. UserRoutes 继承 CommonRoutes
-   - 实现用户验证检查
-   - 提供用户资料管理路由
-   - 提供密码修改路由
+2. **路由层（Routes）**
+   - UserRoutes: 继承 CommonRoutes，实现用户验证
+     - GET /profile - 获取当前用户资料
+     - PUT /profile - 更新用户资料
+     - POST /change-password - 修改密码
+   - ProductRoutes: 继承 CommonRoutes，实现租户验证
+     - 使用 TenantBaseController 和 TenantSearchController
+     - 提供产品 CRUD 路由
+   - AdminRoutes: 继承 CommonRoutes，实现管理员验证
+     - 提供用户管理路由
+     - 提供系统统计路由
 
-3. ProductRoutes 继承 CommonRoutes
-   - 实现租户验证
-   - 提供产品 CRUD 路由
-   - 使用 TenantBaseController 和 TenantSearchController
+3. **Controller 层**
+   - 直接继承对应的 BaseXxxController
+   - 接收 HTTP 请求参数
+   - **边界检查**：参数验证、权限检查、数据格式校验
+   - 调用 Service 层处理业务逻辑
+   - 返回统一格式的响应
+   - Controller 是实现类，不需要接口
+   - 不包含核心业务逻辑，只负责请求/响应处理和边界检查
 
-4. AdminRoutes 继承 CommonRoutes
-   - 实现管理员验证
-   - 提供用户管理路由
-   - 提供系统统计路由
+4. **Service 层**
+   - 实现核心业务逻辑
+   - **业务逻辑检查**：外键约束、业务规则验证、数据一致性检查
+   - 事务管理
+   - 调用 DAO 层进行数据访问
+   - 可被多个 Controller 复用
+   - 处理业务异常和验证
 
-5. 服务层实现所有业务逻辑
+5. **DAO 层**
+   - 接口定义：定义数据访问方法签名
+   - 实现类：执行实际的数据库操作（SQL/ORM）
+   - 处理事务和连接管理
+   - 使用接口便于测试和替换实现
 
-6. index.ts 启动服务器
+6. **Entity 层**
+   - 定义数据模型/实体类
+   - 包含字段定义和验证规则
+   - 映射数据库表结构
 
-请生成完整的代码，包含错误处理、日志记录和类型定义。
-```
+7. **层次调用关系**
+   - Route -> Controller -> Service -> DAO -> Entity
+   - 每层只调用下一层，不跨层调用
+   - 依赖注入：DAO 接口注入到 Service，Service 实例注入到 Controller
+   - Service 使用接口类型，便于单元测试时 mock
+
+请生成完整的代码实现，包含：
+- 完整的类型定义和接口
+- 错误处理和日志记录
+- 数据库连接管理
+- 依赖注入模式
+- 示例数据访问代码
+
 
 ---
 
@@ -201,15 +258,28 @@ src/
 
 ### CommonRoutes 可重写的方法：
 - `getUserHook(): ((user: any) => any) | null` - 用户数据处理钩子
-- `userCheck(user: CommonUser): boolean | Promise<boolean>` - 用户验证
+- `userCheck(user: CommonUser): boolean | Promise<boolean>` - 用户验证（默认返回true）
 - `getGlobalHandler(): RequestHandler | null` - 全局中间件
 - `bindRoutes(): void` - 路由定义
+
+### CommonRoutes 路由注册方法：
+- `get(path, handler)` - 注册GET路由（自动记录日志）
+- `post(path, handler)` - 注册POST路由（自动记录日志）
+- `put(path, handler)` - 注册PUT路由（自动记录日志）
+- `delete(path, handler)` - 注册DELETE路由（自动记录日志）
 
 ### 中间件执行顺序：
 1. getUserHook (如果定义)
 2. userCheck
 3. getGlobalHandler (如果定义)
 4. bindRoutes 中的路由处理器
+
+### RouterHelper 单例方法：
+- `routerHelper.invokeRestfulAction(func)` - 包装RESTful处理器（自动错误处理和JSON序列化）
+- `routerHelper.invokeController(func)` - 包装控制器处理器（自动错误处理）
+- `routerHelper.retrieveUser()` - 从请求头解析用户信息（非侵入式）
+- `routerHelper.checkLoggedUser()` - 验证用户是否已登录
+- `routerHelper.actionNotFound()` - 404错误处理
 
 ---
 

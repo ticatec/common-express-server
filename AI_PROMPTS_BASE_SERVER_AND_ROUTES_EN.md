@@ -124,51 +124,109 @@ Ensure:
 ```
 Please help me create a complete Express application using @ticatec/common-express-server framework. Requirements:
 
-Project structure:
+Project structure (organized by business modules):
 ```
 src/
 ├── server/
-│   ├── MyServer.ts          # Main server class
-│   └── routes/
-│       ├── UserRoutes.ts    # User routes
-│       ├── ProductRoutes.ts # Product routes
-│       └── AdminRoutes.ts   # Admin routes
-├── services/
-│   ├── UserService.ts       # User service
-│   └── ProductService.ts    # Product service
+│   ├── MyServer.ts              # Main server class
+│   └── index.ts                 # Server startup entry
+├── modules/
+│   ├── user/                    # User management module (all files flat)
+│   │   ├── UserRoutes.ts                # User route definitions
+│   │   ├── AdminUserRoutes.ts           # User management routes (admin)
+│   │   ├── UserController.ts            # User controller implementation
+│   │   ├── UserSearchController.ts      # User search controller implementation
+│   │   ├── UserService.ts               # User service (business logic)
+│   │   ├── IUserDao.ts                  # User DAO interface
+│   │   ├── UserDao.ts                   # User DAO implementation (database operations)
+│   │   └── User.ts                      # User entity/model
+│   ├── product/                 # Product management module (all files flat)
+│   │   ├── ProductRoutes.ts             # Product route definitions
+│   │   ├── TenantProductRoutes.ts       # Tenant product routes
+│   │   ├── ProductController.ts         # Product controller implementation
+│   │   ├── ProductSearchController.ts   # Product search controller
+│   │   ├── ProductService.ts            # Product service (business logic)
+│   │   ├── IProductDao.ts               # Product DAO interface
+│   │   ├── ProductDao.ts                # Product DAO implementation
+│   │   └── Product.ts                   # Product entity/model
+│   └── admin/                  # Admin module (all files flat)
+│       ├── AdminRoutes.ts               # Admin routes
+│       ├── AdminController.ts           # Admin controller
+│       ├── AdminService.ts              # Admin service (business logic)
+│       ├── IAdminDao.ts                 # Admin DAO interface
+│       ├── AdminDao.ts                  # Admin DAO implementation
+│       └── AdminStats.ts                # Admin statistics entity
 ├── config/
-│   └── app.json             # App configuration
-└── index.ts                 # Entry file
+│   ├── app.json                 # Application configuration
+│   └── database.ts              # Database connection configuration
+├── common/                      # Common utilities and middleware
+│   ├── validators.ts            # Validators
+│   └── utils.ts                 # Utility functions
+└── types/                       # TypeScript type definitions
+    └── index.ts
 ```
 
-Requirements:
-1. MyServer extends BaseServer
+Architecture requirements:
+
+1. **MyServer extends BaseServer**
    - Load configuration from config/app.json
-   - Initialize database connection
-   - Configure CORS
-   - Bind all routes
-   - Start server
+   - Initialize database connection pool
+   - Configure middleware: CORS, body-parser, helmet, etc.
+   - Bind all module routes to their respective paths
+   - Start server and listen on configured port
 
-2. UserRoutes extends CommonRoutes
-   - Implement user verification check
-   - Provide user profile management routes
-   - Provide password change route
+2. **Routes Layer**
+   - UserRoutes: extends CommonRoutes, implements user verification
+     - GET /profile - Get current user profile
+     - PUT /profile - Update user profile
+     - POST /change-password - Change password
+   - ProductRoutes: extends CommonRoutes, implements tenant verification
+     - Use TenantBaseController and TenantSearchController
+     - Provide product CRUD routes
+   - AdminRoutes: extends CommonRoutes, implements admin verification
+     - Provide user management routes
+     - Provide system statistics routes
 
-3. ProductRoutes extends CommonRoutes
-   - Implement tenant verification
-   - Provide product CRUD routes
-   - Use TenantBaseController and TenantSearchController
+3. **Controller Layer**
+   - Direct implementation classes extending BaseXxxController
+   - Receive HTTP request parameters
+   - **Boundary Checks**: Parameter validation, permission checks, data format validation
+   - Call Service layer to handle business logic
+   - Return unified response format
+   - Controllers are implementations, no interfaces needed
+   - No core business logic, only request/response handling and boundary checks
 
-4. AdminRoutes extends CommonRoutes
-   - Implement admin verification
-   - Provide user management routes
-   - Provide system statistics routes
+4. **Service Layer**
+   - Implement core business logic
+   - **Business Logic Checks**: Foreign key constraints, business rule validation, data consistency checks
+   - Transaction management
+   - Call DAO layer for data access
+   - Reusable across multiple Controllers
+   - Handle business exceptions and validation
 
-5. Service layer implements all business logic
+5. **DAO Layer**
+   - Interface definition: Define data access method signatures
+   - Implementation class: Execute actual database operations (SQL/ORM)
+   - Handle transactions and connection management
+   - Use interfaces for easy testing and implementation replacement
 
-6. index.ts starts the server
+6. **Entity Layer**
+   - Define data models/entity classes
+   - Include field definitions and validation rules
+   - Map to database table structures
 
-Please generate complete code with error handling, logging, and type definitions.
+7. **Layer Invocation Chain**
+   - Route -> Controller -> Service -> DAO -> Entity
+   - Each layer only calls the next layer, no cross-layer calls
+   - Dependency Injection: DAO interfaces injected into Service, Service instances injected into Controller
+   - Services use interface types for easy mocking in unit tests
+
+Please generate complete implementation with:
+- Complete type definitions and interfaces
+- Error handling and logging
+- Database connection management
+- Dependency injection pattern
+- Example data access code
 ```
 
 ---
@@ -201,15 +259,28 @@ Usage tips:
 
 ### CommonRoutes Methods to Override:
 - `getUserHook(): ((user: any) => any) | null` - User data processing hook
-- `userCheck(user: CommonUser): boolean | Promise<boolean>` - User validation
+- `userCheck(user: CommonUser): boolean | Promise<boolean>` - User validation (defaults to true)
 - `getGlobalHandler(): RequestHandler | null` - Global middleware
 - `bindRoutes(): void` - Route definitions
+
+### CommonRoutes Route Registration Methods:
+- `get(path, handler)` - Register GET route (auto logging)
+- `post(path, handler)` - Register POST route (auto logging)
+- `put(path, handler)` - Register PUT route (auto logging)
+- `delete(path, handler)` - Register DELETE route (auto logging)
 
 ### Middleware Execution Order:
 1. getUserHook (if defined)
 2. userCheck
 3. getGlobalHandler (if defined)
 4. Route handlers in bindRoutes
+
+### RouterHelper Singleton Methods:
+- `routerHelper.invokeRestfulAction(func)` - Wrap RESTful handler (auto error handling & JSON serialization)
+- `routerHelper.invokeController(func)` - Wrap controller handler (auto error handling)
+- `routerHelper.retrieveUser()` - Parse user from headers (non-invasive)
+- `routerHelper.checkLoggedUser()` - Verify user is logged in
+- `routerHelper.actionNotFound()` - 404 error handling
 
 ---
 
