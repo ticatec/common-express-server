@@ -140,7 +140,7 @@ class AdminRoutes extends CommonRoutes {
 
 #### 自定义用户验证
 
-`userCheck()` 方法允许你在认证之外实现自定义验证逻辑：
+`isValidUser()` 方法允许你在认证之外实现自定义验证逻辑：
 
 ```typescript
 import { CommonRoutes } from '@ticatec/common-express-server';
@@ -148,7 +148,7 @@ import { CommonRoutes } from '@ticatec/common-express-server';
 class VerifiedUserRoutes extends CommonRoutes {
 
     // 验证用户账户状态
-    protected async userCheck(user: any): Promise<boolean> {
+    protected async isValidUser(user: any): Promise<boolean> {
         if (!user) {
             return false;
         }
@@ -172,14 +172,14 @@ class VerifiedUserRoutes extends CommonRoutes {
 ```typescript
 // 检查用户角色
 class AdminRoutes extends CommonRoutes {
-    protected userCheck(user: any): boolean {
+    protected isValidUser(user: any): boolean {
         return user && user.roles && user.roles.includes('admin');
     }
 }
 
 // 租户验证
 class TenantRoutes extends CommonRoutes {
-    protected async userCheck(user: any): Promise<boolean> {
+    protected async isValidUser(user: any): Promise<boolean> {
         if (!user || !user.tenant) {
             return false;
         }
@@ -227,8 +227,8 @@ import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class PublicRoutes extends CommonRoutes {
 
-    // 覆盖 userCheck 以允许公开访问（无需认证）
-    protected userCheck(user: any): boolean {
+    // 覆盖 isValidUser 以允许公开访问（无需认证）
+    protected isValidUser(user: any): boolean {
         return true; // 允许无需认证访问
     }
 
@@ -347,14 +347,14 @@ routerHelper.invokeController()    // 包装控制器处理器
 **中间件执行顺序：**
 ```
 1. getUserHook()           - 处理并丰富用户数据
-2. userCheck()             - 自定义用户验证
+2. isValidUser()             - 自定义用户验证
 3. getGlobalHandler()      - 自定义中间件
 4. bindRoutes()            - 路由定义
 ```
 
 **关键方法：**
 - `getUserHook(): ((user: any) => any) | null` - 处理用户数据
-- `userCheck(user: any): boolean | Promise<boolean>` - 自定义用户验证
+- `isValidUser(user: any): boolean | Promise<boolean>` - 自定义用户验证
 - `getGlobalHandler(): RequestHandler | null` - 自定义中间件
 - `bindRoutes()` - 定义你的路由
 
@@ -389,7 +389,7 @@ routerHelper.invokeController()    // 包装控制器处理器
 │              CommonRoutes 中间件执行顺序                     │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. getUserHook()           - 处理用户数据                    │
-│ 2. userCheck()             - 自定义用户验证                  │
+│ 2. isValidUser()             - 自定义用户验证                  │
 │ 3. getGlobalHandler()      - 自定义中间件                    │
 │ 4. bindRoutes()            - 路由定义                        │
 └─────────────────────────────────────────────────────────────┘

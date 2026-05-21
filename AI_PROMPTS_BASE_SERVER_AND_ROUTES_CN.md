@@ -36,7 +36,7 @@
 请帮我创建一个继承自 CommonRoutes 的路由类，用于用户管理。要求如下：
 
 1. 类名为 UserRoutes，构造函数不需要参数
-2. 实现 userCheck() 方法，验证用户是否已登录且账户状态为 'active'
+2. 实现 isValidUser() 方法，验证用户是否已登录且账户状态为 'active'
 3. 实现 bindRoutes() 方法，定义以下路由：
    - GET /profile - 获取当前用户资料
    - PUT /profile - 更新用户资料
@@ -65,7 +65,7 @@
    - 从数据库加载管理员角色
    - 检查管理员是否拥有必要的权限
    - 将权限信息添加到 user.permissions
-3. 实现 userCheck() 方法，验证用户是否为平台管理员（user.isPlatform === true）
+3. 实现 isValidUser() 方法，验证用户是否为平台管理员（user.isPlatform === true）
 4. 实现 getGlobalHandler() 方法，添加全局中间件检查请求头 'x-admin-token'
 5. 实现 bindRoutes() 方法，定义管理员路由：
    - GET /users - 获取所有用户列表
@@ -77,7 +77,7 @@
 
 请确保：
 - 在 getUserHook 中使用异步操作加载权限
-- 在 userCheck 中同时检查原始用户和 actAs 用户
+- 在 isValidUser 中同时检查原始用户和 actAs 用户
 - 在 getGlobalHandler 中抛出适当的错误（如 IllegalParameterError）
 - 所有路由使用 routerHelper.invokeRestfulAction 包装
 ```
@@ -95,7 +95,7 @@
    - 加载租户的功能开关
    - 验证租户是否有效
    - 将租户数据添加到 user.tenantData
-3. 实现 userCheck() 方法，验证：
+3. 实现 isValidUser() 方法，验证：
    - 用户已登录
    - 用户关联到有效的租户
    - 租户状态为 'active'
@@ -112,7 +112,7 @@
 
 请确保：
 - 在 getUserHook 中捕获并处理加载租户数据时的错误
-- 在 userCheck 中检查 user.tenant 是否存在且有效
+- 在 isValidUser 中检查 user.tenant 是否存在且有效
 - 所有数据库操作使用 try-catch 包装
 - 使用 this.logger.debug 记录调试信息
 ```
@@ -275,7 +275,7 @@ src/
 
 ### CommonRoutes 可重写的方法：
 - `getUserHook(): ((user: any) => any) | null` - 用户数据处理钩子
-- `userCheck(user: CommonUser): boolean | Promise<boolean>` - 用户验证（默认返回true）
+- `isValidUser(user: CommonUser): boolean | Promise<boolean>` - 用户验证（默认返回true）
 - `getGlobalHandler(): RequestHandler | null` - 全局中间件
 - `bindRoutes(): void` - 路由定义
 
@@ -287,7 +287,7 @@ src/
 
 ### 中间件执行顺序：
 1. getUserHook (如果定义)
-2. userCheck
+2. isValidUser
 3. getGlobalHandler (如果定义)
 4. bindRoutes 中的路由处理器
 

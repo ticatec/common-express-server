@@ -303,7 +303,7 @@ interface SearchResult<T> {
 2. 导入和实例化以下控制器：
    - ProductController (TenantBaseController)
    - ProductSearchController (TenantSearchController)
-3. 实现 userCheck()：
+3. 实现 isValidUser()：
    - 验证用户已登录
    - 验证用户关联到有效租户
 4. 实现 bindRoutes()：

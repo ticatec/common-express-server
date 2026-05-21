@@ -36,7 +36,7 @@ Ensure:
 Please help me create a route class that extends CommonRoutes for user management. Requirements:
 
 1. Class name: UserRoutes, constructor takes no parameters
-2. Implement userCheck() to verify user is logged in and account status is 'active'
+2. Implement isValidUser() to verify user is logged in and account status is 'active'
 3. Implement bindRoutes() to define:
    - GET /profile - Get current user profile
    - PUT /profile - Update user profile
@@ -65,7 +65,7 @@ Please help me create an admin route class that extends CommonRoutes. Requiremen
    - Load admin roles from database
    - Check if admin has necessary permissions
    - Add permissions to user.permissions
-3. Implement userCheck() to verify user is platform admin (user.isPlatform === true)
+3. Implement isValidUser() to verify user is platform admin (user.isPlatform === true)
 4. Implement getGlobalHandler() to add global middleware checking 'x-admin-token' header
 5. Implement bindRoutes() to define admin routes:
    - GET /users - Get all users list
@@ -77,7 +77,7 @@ Please help me create an admin route class that extends CommonRoutes. Requiremen
 
 Ensure:
 - Use async operations in getUserHook to load permissions
-- Check both original user and actAs user in userCheck
+- Check both original user and actAs user in isValidUser
 - Throw appropriate errors in getGlobalHandler (e.g., IllegalParameterError)
 - Wrap all routes with routerHelper.invokeRestfulAction
 ```
@@ -95,7 +95,7 @@ Please help me create a tenant-specific route class that extends CommonRoutes. R
    - Load tenant feature flags
    - Verify tenant is valid
    - Add tenant data to user.tenantData
-3. Implement userCheck() to verify:
+3. Implement isValidUser() to verify:
    - User is logged in
    - User is associated with a valid tenant
    - Tenant status is 'active'
@@ -112,7 +112,7 @@ Please help me create a tenant-specific route class that extends CommonRoutes. R
 
 Ensure:
 - Catch and handle errors when loading tenant data in getUserHook
-- Check user.tenant exists and is valid in userCheck
+- Check user.tenant exists and is valid in isValidUser
 - Wrap all database operations with try-catch
 - Use this.logger.debug for debug logging
 ```
@@ -149,6 +149,17 @@ src/
 │   │   ├── IProductDao.ts               # Product DAO interface
 │   │   ├── ProductDao.ts                # Product DAO implementation
 │   │   └── Product.ts                   # Product entity/model
+│   ├── order/                   # Order management module (layered structure example)
+│   │   ├── OrderRoutes.ts               # Order route definitions
+│   │   ├── OrderController.ts           # Order controller implementation
+│   │   ├── OrderService.ts              # Order service (business logic)
+│   │   ├── IOrderDao.ts                 # Order DAO interface
+│   │   ├── OrderDao.ts                  # Order DAO implementation
+│   │   ├── Order.ts                     # Order entity/model
+│   │   └── details/                     # Order detail sub-module (tightly coupled entities)
+│   │       ├── OrderDetail.ts           # Order detail entity
+│   │       ├── IOrderDetailDao.ts       # Order detail DAO interface
+│   │       └── OrderDetailDao.ts        # Order detail DAO implementation
 │   └── admin/                  # Admin module (all files flat)
 │       ├── AdminRoutes.ts               # Admin routes
 │       ├── AdminController.ts           # Admin controller
@@ -165,6 +176,12 @@ src/
 └── types/                       # TypeScript type definitions
     └── index.ts
 ```
+
+**Module Layering Explanation**:
+- For tightly coupled entities (e.g., Order/OrderDetail), create subdirectories within the module
+- Subdirectories only contain DAO interfaces, DAO implementations, and entity classes for that entity
+- Routes, controllers, and services remain at the top level, managing business logic for both main and sub-entities
+- Applicable scenarios: master-detail relationships, parent-child entities, aggregate root pattern
 
 Architecture requirements:
 
@@ -259,7 +276,7 @@ Usage tips:
 
 ### CommonRoutes Methods to Override:
 - `getUserHook(): ((user: any) => any) | null` - User data processing hook
-- `userCheck(user: CommonUser): boolean | Promise<boolean>` - User validation (defaults to true)
+- `isValidUser(user: CommonUser): boolean | Promise<boolean>` - User validation (defaults to true)
 - `getGlobalHandler(): RequestHandler | null` - Global middleware
 - `bindRoutes(): void` - Route definitions
 
@@ -271,7 +288,7 @@ Usage tips:
 
 ### Middleware Execution Order:
 1. getUserHook (if defined)
-2. userCheck
+2. isValidUser
 3. getGlobalHandler (if defined)
 4. Route handlers in bindRoutes
 

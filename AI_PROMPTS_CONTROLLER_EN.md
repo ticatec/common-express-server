@@ -303,7 +303,7 @@ Please help me create a complete route class that uses various controllers. Requ
 2. Import and instantiate these controllers:
    - ProductController (TenantBaseController)
    - ProductSearchController (TenantSearchController)
-3. Implement userCheck():
+3. Implement isValidUser():
    - Verify user is logged in
    - Verify user is associated with valid tenant
 4. Implement bindRoutes():

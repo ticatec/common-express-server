@@ -1,6 +1,5 @@
 import express, {Express, NextFunction, Request, Response} from 'express';
-import RouterHelper from "./RouterHelper";
-import {handleError} from "@ticatec/express-exception";
+import {handleError} from "@ticatec/node-exception";
 import fs from 'fs';
 import http from "http";
 import {Logger} from "log4js";
@@ -67,7 +66,7 @@ export default abstract class BaseServer {
         try {
             await this.beforeStart();
             let webConf = this.getWebConf();
-            this.logger.debug('Web configuration loaded', { port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot });
+            this.logger.debug('Web configuration loaded', {port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot});
             this.writeCheckFile(webConf.port);
             this.contextRoot = webConf.contextRoot;
             await this.startWebServer(webConf);
@@ -136,14 +135,15 @@ export default abstract class BaseServer {
     protected async startWebServer(webConf: any): Promise<unknown> {
         let app = express();
         app.disable("x-powered-by");
-        app.use(RouterHelper.setNoCache);
+        const routerHelper = (await import("./RouterHelper")).default;
+        app.use(routerHelper.setNoCache);
         this.app = app;
         this.addHealthCheck();
         this.setupExpress();
         await this.bindStaticSite();
-        app.use(RouterHelper.retrieveUser());
+        app.use(routerHelper.retrieveUser());
         await this.setupRoutes();
-        app.use(RouterHelper.actionNotFound());
+        app.use(routerHelper.actionNotFound());
         app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
             this.logger.debug("application error: ", err);
             handleError(err, req, res, next);

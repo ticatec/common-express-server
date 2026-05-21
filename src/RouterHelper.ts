@@ -1,7 +1,6 @@
 import {NextFunction, Request, Response} from "express";
-import {ActionNotFoundError, handleError, UnauthenticatedError} from '@ticatec/express-exception';
+import {ActionNotFoundError, handleError, UnauthenticatedError} from '@ticatec/node-exception';
 import log4js from "log4js";
-import LoggedUser from "./LoggedUser";
 
 
 /**

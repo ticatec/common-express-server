@@ -1,7 +1,7 @@
 import {Express, Request, Response, Router} from "express";
 import log4js, {Logger} from "log4js";
 import {RequestHandler, NextFunction} from "express-serve-static-core";
-import {UnauthenticatedError} from "@ticatec/express-exception";
+import {UnauthenticatedError} from "@ticatec/node-exception";
 import LoggedUser, {CommonUser} from "./LoggedUser";
 
 /**
@@ -15,7 +15,7 @@ import LoggedUser, {CommonUser} from "./LoggedUser";
  *
  * The middleware execution order is:
  * 1. User hook processing (if `getUserHook()` returns a function)
- * 2. Custom user validation check (via `userCheck()`)
+ * 2. Custom user validation check (via `isValidUser()`)
  * 3. Global middleware (if `getGlobalHandler()` returns a handler)
  * 4. Route handlers (defined in `bindRoutes()`)
  *
@@ -32,7 +32,7 @@ import LoggedUser, {CommonUser} from "./LoggedUser";
  *   }
  *
  *   // Enable authentication and validation
- *   protected async userCheck(user: any): Promise<boolean> {
+ *   protected async isValidUser(user: CommonUser): Promise<boolean> {
  *     // Check if user exists and account is active
  *     if (!user) {
  *       return false;
@@ -72,7 +72,7 @@ export default class CommonRoutes {
      *
      * The binding process follows this order:
      * 1. If `getUserHook()` returns a function, adds user hook middleware (with error handling)
-     * 2. Adds custom user validation middleware (via `userCheck()`)
+     * 2. Adds custom user validation middleware (via `isValidUser()`)
      * 3. If `getGlobalHandler()` returns a handler, adds global middleware
      * 4. Calls `bindRoutes()` to register route definitions
      * 5. Mounts the router to the Express app at the specified path
@@ -98,8 +98,8 @@ export default class CommonRoutes {
         this.router.use(async (req: Request, res: Response, next: NextFunction) => {
             try {
                 let user = req['user'] as LoggedUser;
-                if (!await this.userCheck(user?.actAs ?? user)) {
-                    this.logger.debug(`User check failed: ${user}`);
+                if (!await this.isValidUser(user?.actAs ?? user)) {
+                    this.logger.debug(`User validation failed: ${JSON.stringify(user)}`);
                     next(new UnauthenticatedError());
                 } else {
                     next();
@@ -121,6 +121,8 @@ export default class CommonRoutes {
 
     /**
      * Performs custom user validation check
+     *
+     * @deprecated Use {@link isValidUser} instead. This method will be removed in a future version.
      *
      * Override this method to implement custom user validation logic.
      * This method is called after the user hook (if any) and before the global middleware.
@@ -177,6 +179,63 @@ export default class CommonRoutes {
         return true;
     }
 
+    /**
+     * Performs custom user validation check
+     *
+     * Override this method to implement custom user validation logic.
+     * This method is called after the user hook (if any) and before the global middleware.
+     * It receives the user object (or the actAs user if impersonation is active) and
+     * should return true if the user is valid, or false/throw an error otherwise.
+     *
+     * When this method returns false, an UnauthenticatedError is thrown automatically.
+     * If an error is thrown, it will be passed to Express's error handling middleware.
+     *
+     * This is useful for:
+     * - Additional authorization checks beyond authentication
+     * - Validating user permissions or roles
+     * - Checking account status (e.g., active, suspended)
+     * - Tenant-specific validation
+     * - Custom business rules for user access
+     *
+     * @param user The user object to validate (will be user.actAs if impersonation is active)
+     * @returns true if the user passes validation, false otherwise
+     * @protected
+     *
+     * @example
+     * ```typescript
+     * // Check if user account is active
+     * protected async isValidUser(user: CommonUser): Promise<boolean> {
+     *   if (!user) {
+     *     return false;
+     *   }
+     *   const account = await database.getAccount(user.accountCode);
+     *   return account && account.status === 'active';
+     * }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Check if user has required role
+     * protected isValidUser(user: CommonUser): boolean {
+     *   return user && user.roles && user.roles.includes('admin');
+     * }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Check tenant-specific access
+     * protected async isValidUser(user: CommonUser): Promise<boolean> {
+     *   if (!user || !user.tenant) {
+     *     return false;
+     *   }
+     *   const tenant = await database.getTenant(user.tenant.code);
+     *   return tenant && tenant.isActive;
+     * }
+     * ```
+     */
+    protected isValidUser(user: CommonUser): boolean | Promise<boolean> {
+        return true;
+    }
 
     /**
      * Abstract method for binding routes
@@ -349,12 +408,12 @@ export default class CommonRoutes {
      * processed user object. The returned value will replace `req['user']`.
      *
      * This hook is executed in the middleware pipeline **before the user validation check**
-     * (via `userCheck()`). It is wrapped with automatic error handling - any errors thrown
+     * (via `isValidUser()`). It is wrapped with automatic error handling - any errors thrown
      * will be passed to Express's error handling middleware.
      *
      * **Middleware execution order:**
      * 1. User hook processing (if `getUserHook()` returns a function)
-     * 2. User validation check (via `userCheck()`)
+     * 2. User validation check (via `isValidUser()`)
      * 3. Global handler middleware (if `getGlobalHandler()` returns a handler)
      * 4. Route handlers (defined in `bindRoutes()`)
      *
@@ -385,7 +444,7 @@ export default class CommonRoutes {
      *
      * @example
      * ```typescript
-     * // Load tenant-specific settings before userCheck validates them
+     * // Load tenant-specific settings before isValidUser validates them
      * protected getUserHook(): ((user: any) => any) | null {
      *   return async (user) => {
      *     if (user && user.tenant) {
