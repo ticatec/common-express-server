@@ -113,6 +113,7 @@ class RouterHelper {
                     res.status(204).send();
                 }
             } catch (ex) {
+                this.logger.debug(ex);
                 handleError(ex, req, res, null);
             }
         }
@@ -149,6 +150,7 @@ class RouterHelper {
             try {
                 await func(req, res);
             } catch (ex) {
+                this.logger.debug(ex);
                 handleError(ex, req, res, null);
             }
         }
