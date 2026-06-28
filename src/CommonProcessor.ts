@@ -35,7 +35,8 @@ export default abstract class CommonProcessor<T> {
             this.logger.debug('启动处理器');
             this.nappingDuration = this.interval;
             this.status = ProcessStatus.Napping;
-            this.processInterval = setInterval( this.checkNap(), 1000);
+            // 修复：不要带括号执行，直接传函数本身（或者使用箭头函数包裹）
+            this.processInterval = setInterval(() => this.checkNap(), 1000);
         }
     }
 
@@ -50,16 +51,26 @@ export default abstract class CommonProcessor<T> {
         }
     }
 
-    private checkNap() {
-        return async () => {
-            this.nappingDuration++;
-            if (this.nappingDuration >= this.interval && this.status == ProcessStatus.Napping) {
-                this.status = ProcessStatus.Running;
-                try {
-                    await this.startProcess();
-                } finally {
-                    this.status = ProcessStatus.Napping;
-                }
+    private async checkNap() {
+        this.nappingDuration++;
+
+        // 增加安全防线：如果已经是 Running 状态，直接拦截，防止并发导致的死锁
+        if (this.status === ProcessStatus.Running) {
+            return;
+        }
+
+        if (this.nappingDuration >= this.interval && this.status == ProcessStatus.Napping) {
+            this.status = ProcessStatus.Running;
+            try {
+                // 确保等待异步任务完全结束后，再进入 finally
+                await this.startProcess();
+            } catch (error) {
+                this.logger.error("进程执行期间发生未捕获异常:", error);
+            } finally {
+                // 只有当 startProcess 真正 resolved 或 rejected 之后，才会执行到这里
+                this.status = ProcessStatus.Napping;
+                // 重置计数器，等待下一个周期
+                this.nappingDuration = 0;
             }
         }
     }
