@@ -16,8 +16,8 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 - 📝 **Validation**: Integrated data validation using bean-validator
 - 🔄 **Error Handling**: Centralized error handling and logging
 - 🌐 **Internationalization**: Built-in language support via headers
-- 📊 **Logging**: Structured logging with log4js integration
-- 🎨 **TypeScript First**: Full TypeScript support with comprehensive type definitions
+- 📊 **Logging**: Structured logging integrated with `@ticatec/logger-wrapper` and Pino
+- 📦 **Dual Module Support**: Full CommonJS and ESM compatibility out of the box
 
 ## Documentation
 
@@ -26,13 +26,13 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 ## Installation
 
 ```bash
-npm install @ticatec/common-express-server
+npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper pino
 ```
 
 ### Peer Dependencies
 
 ```bash
-npm install express@^5.1.0
+npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/logger-wrapper@^0.1.0 pino@>=8.0.0
 ```
 
 ## Quick Start

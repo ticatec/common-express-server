@@ -1,6 +1,6 @@
 import {Request} from "express";
-import TenantBaseController from "./TenantBaseController";
-import Controller from "./Controller";
+import TenantBaseController from "./TenantBaseController.js";
+import Controller from "./Controller.js";
 
 
 /**
@@ -15,8 +15,8 @@ export default abstract class TenantSearchController<T> extends TenantBaseContro
      */
     search() {
         return async (req:Request):Promise<any> => {
-            let query:any = req.query;
-            Controller.debugEnabled && this.logger.debug(`Path: ${req.path}, query by criteria:`, query);
+            const query:any = req.query;
+            Controller.debugEnabled && this.logger.debug({ query }, `Path: ${req.path}, query by criteria`);
             this.checkInterface('search');
             return await this.invokeServiceInterface('search', [this.getLoggedUser(req), query]);
         }

@@ -1,6 +1,6 @@
 import {NextFunction, Request, Response} from "express";
 import {ActionNotFoundError, handleError, UnauthenticatedError} from '@ticatec/node-exception';
-import log4js from "log4js";
+import {getLogger} from "@ticatec/logger-wrapper";
 
 
 /**
@@ -42,7 +42,9 @@ export type ControlFunction = (req: Request, res: Response) => any;
  */
 class RouterHelper {
 
-    private readonly logger = log4js.getLogger('RouterHelper');
+    private get logger() {
+        return getLogger('RouterHelper');
+    }
 
     /**
      * Sets HTTP response header to JSON format
@@ -104,9 +106,9 @@ class RouterHelper {
      * ```
      */
     invokeRestfulAction(func: RestfulFunction): any {
-        return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        return async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
             try {
-                let result = await func(req);
+                const result = await func(req);
                 if (result != null) {
                     res.json(result);
                 } else {
@@ -146,7 +148,7 @@ class RouterHelper {
      * ```
      */
     invokeController(func: ControlFunction) {
-        return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        return async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
             try {
                 await func(req, res);
             } catch (ex) {
@@ -177,7 +179,7 @@ class RouterHelper {
      * ```
      */
     actionNotFound() {
-        return (req: Request, res: Response, next: NextFunction) => {
+        return (req: Request, res: Response, _next: NextFunction) => {
             handleError(new ActionNotFoundError(), req, res, null);
         }
     }
@@ -197,11 +199,11 @@ class RouterHelper {
      * @param req Express request object
      */
     protected async retrieveUserFormHeader(req: Request): Promise<void> {
-        let userStr: string = req.headers['user'] as string;
+        const userStr: string = req.headers['user'] as string;
         if (userStr != null) {
             try {
                 const user = JSON.parse(decodeURIComponent(userStr));
-                let language = req.headers['x-language'];
+                const language = req.headers['x-language'];
                 if (language) {
                     if (user.actAs) {
                         user.actAs['language'] = language
@@ -213,7 +215,7 @@ class RouterHelper {
 
                 this.logger.debug(`User retrieved from header: ${user.accountCode}`);
             } catch (ex) {
-                this.logger.warn('Invalid user header format', {error: ex.message, path: req.path});
+                this.logger.warn({error: ex.message, path: req.path}, 'Invalid user header format');
             }
         }
     }
@@ -282,7 +284,7 @@ class RouterHelper {
         return async (req: Request, res: Response, next: any) => {
             await this.retrieveUserFormHeader(req);
             if (req['user'] == null) {
-                this.logger.warn('Unauthenticated request', {path: req.path, method: req.method});
+                this.logger.warn({path: req.path, method: req.method}, 'Unauthenticated request');
                 handleError(new UnauthenticatedError(), req, res, null);
             } else {
                 this.logger.debug(`User authenticated: ${req['user'].accountCode}`);

@@ -2,10 +2,9 @@ import express, {Express, NextFunction, Request, Response} from 'express';
 import {handleError} from "@ticatec/node-exception";
 import fs from 'fs';
 import http from "http";
-import {Logger} from "log4js";
-import log4js from "log4js";
-import CommonRoutes from "./CommonRoutes";
-
+import net from "net";
+import {getLogger, Logger} from "@ticatec/logger-wrapper";
+import CommonRoutes from "./CommonRoutes.js";
 
 /**
  * Function signature for module loader
@@ -18,18 +17,18 @@ export type moduleLoader = () => Promise<any>;
 export default abstract class BaseServer {
 
     /** Logger instance for this server */
-    protected logger: Logger;
+    protected get logger(): Logger {
+        return getLogger(this.constructor.name);
+    }
     /** Context root path for the server */
     protected contextRoot: string;
     protected app: Express;
-
+    protected httpServer: http.Server = null;
 
     /**
-     * Protected constructor for base server
-     * @protected
+     * Constructor for base server
      */
-    protected constructor() {
-        this.logger = log4js.getLogger(this.constructor.name);
+    constructor() {
     }
 
     /**
@@ -48,13 +47,12 @@ export default abstract class BaseServer {
      */
     protected writeCheckFile(port: number, fileName: string = './check.dat') {
         try {
-            this.logger.debug('Port', port);
+            this.logger.debug({ port }, 'Port');
             fs.writeFileSync(fileName, `${port}`);
         } catch (err) {
-            this.logger.error('Error writing port file', err);
+            this.logger.error({ err }, 'Error writing port file');
         }
     }
-
 
     /**
      * Starts up the server
@@ -65,24 +63,23 @@ export default abstract class BaseServer {
         await this.loadConfigFile();
         try {
             await this.beforeStart();
-            let webConf = this.getWebConf();
-            this.logger.debug('Web configuration loaded', {port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot});
-            this.writeCheckFile(webConf.port);
+            const webConf = this.getWebConf();
+            this.logger.debug({ port: webConf.port, ip: webConf.ip, contextRoot: webConf.contextRoot }, 'Web configuration loaded');
             this.contextRoot = webConf.contextRoot;
             await this.startWebServer(webConf);
         } catch (err) {
-            this.logger.error('Startup failed, reason:', err);
+            this.logger.error({ err }, 'Startup failed');
             throw err;
         }
     }
 
     /**
      * Interceptor function called after web server is created
-     * @param server The HTTP server instance
+     * @param _server The HTTP server instance
      * @returns Promise that resolves when post-creation setup is complete
      * @protected
      */
-    protected async postServerCreated(server: http.Server): Promise<void> {
+    protected async postServerCreated(_server: http.Server): Promise<void> {
 
     }
 
@@ -117,11 +114,11 @@ export default abstract class BaseServer {
      * @protected
      */
     protected addHealthCheck() {
-        let path = this.getHealthCheckPath();
-        this.logger.debug('Loading system health check', path)
+        const path = this.getHealthCheckPath();
+        this.logger.debug({ path }, 'Loading system health check');
         if (path) {
-            this.app.get(path, (req: Request, res: Response) => {
-                res.send('')
+            this.app.get(path, (_req: Request, res: Response) => {
+                res.send('');
             });
         }
     }
@@ -132,10 +129,10 @@ export default abstract class BaseServer {
      * @returns Promise that resolves to the HTTP server instance
      * @protected
      */
-    protected async startWebServer(webConf: any): Promise<unknown> {
-        let app = express();
+    protected async startWebServer(webConf: any): Promise<http.Server> {
+        const app = express();
         app.disable("x-powered-by");
-        const routerHelper = (await import("./RouterHelper")).default;
+        const routerHelper = (await import("./RouterHelper.js")).default;
         app.use(routerHelper.setNoCache);
         this.app = app;
         this.addHealthCheck();
@@ -145,17 +142,65 @@ export default abstract class BaseServer {
         await this.setupRoutes();
         app.use(routerHelper.actionNotFound());
         app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-            this.logger.debug("application error: ", err);
+            this.logger.debug({ err }, "Application error");
             handleError(err, req, res, next);
         });
 
-        return new Promise(resolve => {
-            let server: http.Server = app.listen(webConf.port, webConf.ip, () => {
-                this.logger.info(`Web service started successfully, listening on IP: ${webConf.ip}, port: ${webConf.port}`);
-                this.postServerCreated(server);
-                resolve(server);
-            })
-        })
+        return new Promise<http.Server>((resolve, reject) => {
+            const onError = (err: Error) => {
+                this.logger.error({ err }, 'Server listen error');
+                reject(err);
+            };
+
+            const server: http.Server = app.listen(webConf.port, webConf.ip, async () => {
+                server.removeListener('error', onError);
+                server.on('error', (err) => this.logger.error({ err }, 'Runtime server error'));
+                try {
+                    const address = server.address() as net.AddressInfo;
+                    const actualPort = address?.port || webConf.port;
+                    await this.postServerCreated(server);
+                    this.writeCheckFile(actualPort);
+                    this.httpServer = server;
+                    this.logger.info(`Web service started successfully, listening on IP: ${webConf.ip}, port: ${actualPort}`);
+                    resolve(server);
+                } catch (err) {
+                    this.logger.error({ err }, 'Post server creation setup failed, closing server');
+                    server.close(() => reject(err));
+                }
+            });
+            server.once('error', onError);
+        });
+    }
+
+    /**
+     * Gracefully shuts down the HTTP server and stops background processors
+     */
+    async shutdown(checkFileName: string = './check.dat'): Promise<void> {
+        this.logger.info('Shutting down server...');
+        try {
+            const { default: ProcessorManager } = await import('./ProcessorManager.js');
+            await ProcessorManager.getInstance().stopAll();
+        } catch (err) {
+            this.logger.warn({ err }, 'Error stopping processor manager');
+        }
+
+        if (fs.existsSync(checkFileName)) {
+            try {
+                fs.unlinkSync(checkFileName);
+            } catch (err) {
+                this.logger.warn({ err }, 'Error removing check file');
+            }
+        }
+
+        if (this.httpServer) {
+            await new Promise<void>((resolve) => {
+                this.httpServer.close(() => {
+                    this.httpServer = null;
+                    resolve();
+                });
+            });
+        }
+        this.logger.info('Server shutdown completed');
     }
 
     /**
@@ -183,8 +228,8 @@ export default abstract class BaseServer {
      * @protected
      */
     protected async bindRoutes(path: string, loader: moduleLoader): Promise<void> {
-        let clazz: any = (await loader()).default;
-        let routes: CommonRoutes = new clazz();
+        const clazz: any = (await loader()).default;
+        const routes: CommonRoutes = new clazz();
         await routes.bind(this.app, `${this.contextRoot}${path}`);
     }
 
@@ -200,11 +245,11 @@ export default abstract class BaseServer {
      * Static method to start a server instance
      * @param server The server instance to start
      */
-    static startup(server: BaseServer) {
-        server.startup().then(() => {
-
-        }).catch(ex => {
-            console.error('Server startup error', ex);
-        })
+    static startup(server: BaseServer): Promise<void> {
+        return server.startup().catch(ex => {
+            server.logger.error({ ex }, 'Server startup error');
+            process.exitCode = 1;
+            throw ex;
+        });
     }
 }

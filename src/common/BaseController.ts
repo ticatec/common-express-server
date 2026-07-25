@@ -1,4 +1,4 @@
-import Controller from "./Controller";
+import Controller from "./Controller.js";
 
 /**
  * Abstract base controller class providing common functionality for all controllers

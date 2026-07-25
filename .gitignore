@@ -1,5 +1,8 @@
-/.idea/
-/package-lock.json
-/node_modules/
-/dist/
-/lib/
+node_modules/
+lib/
+.idea/
+.DS_Store
+*.log
+coverage/
+pnpm-debug.log*
+check.dat

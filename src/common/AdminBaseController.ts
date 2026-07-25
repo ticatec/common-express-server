@@ -1,5 +1,5 @@
 import {ValidationRules} from "@ticatec/bean-validator";
-import CommonController from "./CommonController";
+import CommonController from "./CommonController.js";
 import {Request} from "express";
 
 /**

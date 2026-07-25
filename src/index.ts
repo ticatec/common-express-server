@@ -1,27 +1,22 @@
-
 // Main entry point for @ticatec/common-express-server
 
-// Core classes
-import BaseServer from './BaseServer';
+import BaseServer from './BaseServer.js';
 
-export {default as routerHelper} from './RouterHelper';
-export {default as CommonRoutes} from './CommonRoutes';
-export {default as AppConf} from './AppConf';
+export { default as routerHelper } from './RouterHelper.js';
+export { default as CommonRoutes, AuthenticatedRoutes } from './CommonRoutes.js';
+export { default as AppConf } from './AppConf.js';
 
-// User interfaces
-export { default as LoggedUser, CommonUser } from './LoggedUser';
+export { default as LoggedUser, CommonUser } from './LoggedUser.js';
 
-// Controllers
-export { default as Controller } from './common/Controller';
-export { default as BaseController } from './common/BaseController';
-export { default as CommonController } from './common/CommonController';
-export { default as AdminBaseController } from './common/AdminBaseController';
-export { default as TenantBaseController } from './common/TenantBaseController';
-export { default as AdminSearchController } from './common/AdminSearchController';
-export { default as TenantSearchController } from './common/TenantSearchController';
+export { default as Controller } from './common/Controller.js';
+export { default as BaseController } from './common/BaseController.js';
+export { default as CommonController } from './common/CommonController.js';
+export { default as AdminBaseController } from './common/AdminBaseController.js';
+export { default as TenantBaseController } from './common/TenantBaseController.js';
+export { default as AdminSearchController } from './common/AdminSearchController.js';
+export { default as TenantSearchController } from './common/TenantSearchController.js';
 
-// Types
-export type { RestfulFunction, ControlFunction } from './RouterHelper';
-export type { moduleLoader } from './BaseServer';
+export type { RestfulFunction, ControlFunction } from './RouterHelper.js';
+export type { moduleLoader } from './BaseServer.js';
 
 export default BaseServer;

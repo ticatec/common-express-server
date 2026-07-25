@@ -1,8 +1,7 @@
-import {Express, Request, Response, Router} from "express";
-import log4js, {Logger} from "log4js";
-import {RequestHandler, NextFunction} from "express-serve-static-core";
+import {Express, NextFunction, Request, RequestHandler, Response, Router} from "express";
+import {getLogger, Logger} from "@ticatec/logger-wrapper";
 import {UnauthenticatedError} from "@ticatec/node-exception";
-import LoggedUser, {CommonUser} from "./LoggedUser";
+import LoggedUser, {CommonUser} from "./LoggedUser.js";
 
 /**
  * Abstract base class for defining common routes
@@ -57,7 +56,9 @@ export default class CommonRoutes {
     /** Express router instance */
     private readonly router: Router;
     /** Logger instance for this routes class */
-    protected logger: Logger = log4js.getLogger(this.constructor.name);
+    protected get logger(): Logger {
+        return getLogger(this.constructor.name);
+    }
 
     /**
      * Constructor for common routes
@@ -82,7 +83,7 @@ export default class CommonRoutes {
      */
     async bind(app: Express, path: string): Promise<void> {
         this.logger.debug(`Binding router to path: ${path}`);
-        let userHook = this.getUserHook();
+        const userHook = this.getUserHook();
         if (userHook) {
             this.router.use(async (req: Request, _res: Response, next: NextFunction) => {
                 try {
@@ -97,7 +98,7 @@ export default class CommonRoutes {
         }
         this.router.use(async (req: Request, res: Response, next: NextFunction) => {
             try {
-                let user = req['user'] as LoggedUser;
+                const user = req['user'] as LoggedUser;
                 if (!await this.isValidUser(user?.actAs ?? user)) {
                     this.logger.debug(`User validation failed: ${JSON.stringify(user)}`);
                     next(new UnauthenticatedError());
@@ -109,7 +110,7 @@ export default class CommonRoutes {
             }
 
         });
-        let globalHandler = this.getGlobalHandler();
+        const globalHandler = this.getGlobalHandler();
         if (globalHandler) {
             this.logger.info('Setting global handler middleware');
             this.router.use(globalHandler as RequestHandler);
@@ -175,7 +176,7 @@ export default class CommonRoutes {
      * }
      * ```
      */
-    protected userCheck(user: CommonUser): boolean | Promise<boolean> {
+    protected userCheck(_user: CommonUser): boolean | Promise<boolean> {
         return true;
     }
 
@@ -197,7 +198,7 @@ export default class CommonRoutes {
      * - Tenant-specific validation
      * - Custom business rules for user access
      *
-     * @param user The user object to validate (will be user.actAs if impersonation is active)
+     * @param _user The user object to validate (will be user.actAs if impersonation is active)
      * @returns true if the user passes validation, false otherwise
      * @protected
      *
@@ -232,8 +233,8 @@ export default class CommonRoutes {
      *   return tenant && tenant.isActive;
      * }
      * ```
-     */
-    protected isValidUser(user: CommonUser): boolean | Promise<boolean> {
+     * */
+    protected isValidUser(_user: CommonUser): boolean | Promise<boolean> {
         return true;
     }
 
@@ -459,5 +460,15 @@ export default class CommonRoutes {
      */
     protected getUserHook(): ((user: any) => any) | null {
         return null;
+    }
+}
+
+/**
+ * Subclass of CommonRoutes that requires an authenticated user by default.
+ * Automatically rejects requests with 401 UnauthenticatedError if user is not logged in.
+ */
+export class AuthenticatedRoutes extends CommonRoutes {
+    protected isValidUser(user: CommonUser): boolean | Promise<boolean> {
+        return user != null;
     }
 }

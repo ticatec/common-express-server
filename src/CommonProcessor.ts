@@ -1,5 +1,5 @@
 import {clearInterval} from "node:timers";
-import log4js from "log4js";
+import {getLogger, Logger} from "@ticatec/logger-wrapper";
 
 export enum ProcessStatus {
     Napping,
@@ -8,87 +8,98 @@ export enum ProcessStatus {
 
 export default abstract class CommonProcessor<T> {
 
-    protected logger = log4js.getLogger(this.constructor.name);
+    protected get logger(): Logger {
+        return getLogger(this.constructor.name);
+    }
     protected interval: number;
     protected processInterval: any;
     private nappingDuration!: number;
     private status: ProcessStatus;
     private readonly ants: number;
+    private runningPromise: Promise<void> | null = null;
 
     /**
-     * 构造函数
-     * @param interval 检查间隔
-     * @param ants 工蚁数量，可以同步执行的线程数量
+     * Constructor
+     * @param interval Check interval in seconds
+     * @param ants Number of worker threads that can execute concurrently (default: 5, min: 1)
      * @protected
      */
     protected constructor(interval: number, ants: number = 5) {
         this.interval = Math.max(Math.round(interval), 5);
-        this.ants = ants;
+        this.ants = Math.max(1, Math.round(ants || 5));
         this.nappingDuration = 0;
+        this.status = ProcessStatus.Napping;
     }
 
     /**
-     * 启动
+     * Checks if the processor is currently executing tasks
+     */
+    get isRunning(): boolean {
+        return this.status === ProcessStatus.Running;
+    }
+
+    /**
+     * Startup processor
      */
     startup() {
         if (!this.processInterval) {
-            this.logger.debug('启动处理器');
+            this.logger.debug('Starting processor');
             this.nappingDuration = this.interval;
             this.status = ProcessStatus.Napping;
-            // 修复：不要带括号执行，直接传函数本身（或者使用箭头函数包裹）
             this.processInterval = setInterval(() => this.checkNap(), 1000);
         }
     }
 
     /**
-     * 停止
+     * Stop processor and await in-flight task execution if running
      */
-    stop() {
+    async stop(): Promise<void> {
         if (this.processInterval) {
-            this.logger.debug('停止处理器');
+            this.logger.debug('Stopping processor');
             clearInterval(this.processInterval);
             this.processInterval = null;
+        }
+        if (this.runningPromise) {
+            this.logger.debug('Waiting for in-flight processor tasks to complete');
+            await this.runningPromise;
         }
     }
 
     private async checkNap() {
         this.nappingDuration++;
 
-        // 增加安全防线：如果已经是 Running 状态，直接拦截，防止并发导致的死锁
         if (this.status === ProcessStatus.Running) {
             return;
         }
 
-        if (this.nappingDuration >= this.interval && this.status == ProcessStatus.Napping) {
+        if (this.nappingDuration >= this.interval && this.status === ProcessStatus.Napping) {
             this.status = ProcessStatus.Running;
-            try {
-                // 确保等待异步任务完全结束后，再进入 finally
-                await this.startProcess();
-            } catch (error) {
-                this.logger.error("进程执行期间发生未捕获异常:", error);
-            } finally {
-                // 只有当 startProcess 真正 resolved 或 rejected 之后，才会执行到这里
-                this.status = ProcessStatus.Napping;
-                // 重置计数器，等待下一个周期
-                this.nappingDuration = 0;
-            }
+            this.runningPromise = this.startProcess()
+                .catch((error) => {
+                    this.logger.error({ error }, "Uncaught exception during processor execution");
+                })
+                .finally(() => {
+                    this.status = ProcessStatus.Napping;
+                    this.nappingDuration = 0;
+                    this.runningPromise = null;
+                });
+            await this.runningPromise;
         }
     }
 
-
     /**
-     * 开始处理数据
+     * Start processing pending data
      * @protected
      */
     protected async startProcess(): Promise<void> {
-        let arr = await this.loadToProcessData();
+        const arr = await this.loadToProcessData();
         if (arr.length > 0) {
-            this.logger.debug('有待处理的数据，开始处理数据');
+            this.logger.debug('Pending items found, starting processing');
             const pool = new Set<Promise<void>>();
             for (const item of arr) {
                 const task = this.processItem(item)
                     .catch((ex) => {
-                        this.logger.error(`执行任务 [${item}] 发生错误：`, ex);
+                        this.logger.error({ ex }, 'Error executing task');
                     })
                     .finally(() => {
                         pool.delete(task);
@@ -105,22 +116,21 @@ export default abstract class CommonProcessor<T> {
     }
 
     /**
-     * 读取待处理的数据
+     * Load data to process
      * @protected
      */
     protected abstract loadToProcessData(): Promise<Array<T>>;
 
-
     /**
-     * 立即执行
+     * Trigger immediate execution
      */
     runImmediately() {
-        this.logger.debug('立即执行');
+        this.logger.debug('Triggering immediate execution');
         this.nappingDuration = this.interval;
     }
 
     /**
-     * 处理单条数据
+     * Process single data item
      * @protected
      * @param item
      */

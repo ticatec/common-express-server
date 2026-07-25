@@ -1,7 +1,6 @@
 import {Request} from "express";
-import AdminBaseController from "./AdminBaseController";
-import Controller from "./Controller";
-
+import AdminBaseController from "./AdminBaseController.js";
+import Controller from "./Controller.js";
 
 /**
  * Base class for tenant-independent search interfaces for platform admin
@@ -14,10 +13,11 @@ export default abstract class AdminSearchController<T> extends AdminBaseControll
      * @returns Function that handles search requests
      */
     search() {
-        return (req:Request) => {
-            let query = req.query;
-            Controller.debugEnabled && this.logger.debug(`Path: ${req.path}, query by criteria:`, query);
+        return (req: Request) => {
+            const query = req.query;
+            Controller.debugEnabled && this.logger.debug({ query }, `Path: ${req.path}, query by criteria`);
+            this.checkInterface('search');
             return this.invokeServiceInterface('search', [query]);
-        }
+        };
     }
 }

@@ -1,10 +1,10 @@
 
 import {ActionNotFoundError, IllegalParameterError} from "@ticatec/node-exception";
-import BaseController from "./BaseController";
+import BaseController from "./BaseController.js";
 import beanValidator, {ValidationRules} from "@ticatec/bean-validator";
-import {RestfulFunction} from "../RouterHelper";
+import {RestfulFunction} from "../RouterHelper.js";
 import {Request} from "express";
-import Controller from "./Controller";
+import Controller from "./Controller.js";
 
 /**
  * Controller class that implements Create/Read/Update/Delete operations
@@ -35,9 +35,13 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected validateEntity(data: any) {
-        let result = beanValidator.validate(data, this.rules);
+        if (!this.rules || !Array.isArray(this.rules) || this.rules.length === 0) {
+            return;
+        }
+        const validator: any = (beanValidator as any).validate ? beanValidator : (beanValidator as any).default;
+        const result = validator.validate(data, this.rules);
         if (!result.valid) {
-            Controller.debugEnabled && this.logger.debug(`Invalid data: ${result.errorMessage}`);
+            Controller.debugEnabled && this.logger.debug({ error: result.errorMessage }, 'Invalid entity data');
             throw new IllegalParameterError(result.errorMessage);
         }
     }
@@ -110,8 +114,8 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _createNew(req: Request): Promise<any> {
-        let data:any = this.buildNewEntry(req);
-        Controller.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to create an entity`, data);
+        const data:any = this.buildNewEntry(req);
+        Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to create an entity`);
         this.checkInterface('createNew');
         this.validateEntity(data);
         return this.invokeServiceInterface('createNew', this.getCreateNewArguments(req));
@@ -124,8 +128,8 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _update(req: Request): Promise<any> {
-        let data:any = this.buildUpdatedEntry(req);
-        Controller.debugEnabled && this.logger.debug(`${req.method} ${req.originalUrl} Request to update an entity`, data);
+        const data:any = this.buildUpdatedEntry(req);
+        Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to update an entity`);
         this.checkInterface('update');
         this.validateEntity(data);
         return this.invokeServiceInterface('update', this.getUpdateArguments(req));
@@ -133,11 +137,11 @@ export default abstract class CommonController<T> extends BaseController<T> {
 
     /**
      * Deletes an entity
-     * @param req Express request object
+     * @param _req Express request object
      * @returns Promise resolving when entity is deleted
      * @protected
      */
-    protected _del(req: Request): Promise<any> {
+    protected _del(_req: Request): Promise<any> {
         // Please implement delete interface in subclass, otherwise system exception will be thrown
         this.logger.warn('Current service does not have delete interface');
         throw new ActionNotFoundError();

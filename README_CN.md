@@ -16,8 +16,8 @@
 - 📝 **数据验证**: 使用 bean-validator 集成数据验证
 - 🔄 **错误处理**: 集中式错误处理和日志记录
 - 🌐 **国际化**: 通过请求头内置语言支持
-- 📊 **日志记录**: 与 log4js 集成的结构化日志
-- 🎨 **TypeScript 优先**: 完整的 TypeScript 支持和全面的类型定义
+- 📊 **日志记录**: 与 `@ticatec/logger-wrapper` 和 Pino 集成的结构化日志
+- 📦 **双模块支持**: 原生同时支持 CommonJS (`lib/cjs`) 与 ESM (`lib/esm`)
 
 ## 文档
 
@@ -26,13 +26,13 @@
 ## 安装
 
 ```bash
-npm install @ticatec/common-express-server
+npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper pino
 ```
 
 ### 对等依赖
 
 ```bash
-npm install express@^5.1.0
+npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/logger-wrapper@^0.1.0 pino@>=8.0.0
 ```
 
 ## 快速开始

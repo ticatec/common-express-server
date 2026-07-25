@@ -1,3 +1,5 @@
+import { getLogger } from '@ticatec/logger-wrapper';
+
 /**
  * Application configuration singleton class
  */
@@ -30,7 +32,7 @@ export default class AppConf {
      * @returns AppConf instance
      */
     static init(config: any): AppConf {
-        console.debug('Initializing configuration center', config);
+        getLogger('AppConf').info('Initializing configuration center');
         if (AppConf.instance == null) {
             AppConf.instance = new AppConf(config);
         }
@@ -59,4 +61,3 @@ export default class AppConf {
         return result;
     }
 }
-
