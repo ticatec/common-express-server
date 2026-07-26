@@ -271,4 +271,24 @@ describe('common-express-server comprehensive test suite', () => {
         expect(process.exitCode).toBe(1);
         process.exitCode = 0; // Reset
     });
+
+    test('should resolve RegisteredUser type from Controller.getLoggedUser without generic boilerplate', () => {
+        class RegistryTenantController extends TenantBaseController<MockService> {
+            constructor(service: MockService) {
+                super(service, null);
+            }
+            public getUser(req: any) {
+                return this.getLoggedUser(req);
+            }
+        }
+
+        const service = new MockService();
+        const ctrl = new RegistryTenantController(service);
+        const mockReq: any = {
+            user: { accountCode: 'U999', name: 'ServerUser', roles: ['admin'] }
+        };
+        const user = ctrl.getUser(mockReq);
+        expect(user.accountCode).toBe('U999');
+        expect(user.name).toBe('ServerUser');
+    });
 });

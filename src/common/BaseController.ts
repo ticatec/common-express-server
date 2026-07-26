@@ -17,6 +17,4 @@ export default abstract class BaseController<T> extends Controller {
         super();
         this.service = service;
     }
-
-
 }

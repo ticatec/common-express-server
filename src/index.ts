@@ -6,7 +6,7 @@ export { default as routerHelper } from './RouterHelper.js';
 export { default as CommonRoutes, AuthenticatedRoutes } from './CommonRoutes.js';
 export { default as AppConf } from './AppConf.js';
 
-export { default as LoggedUser, CommonUser } from './LoggedUser.js';
+export { default as LoggedUser, CommonUser, CustomUserRegistry, RegisteredUser } from './LoggedUser.js';
 
 export { default as Controller } from './common/Controller.js';
 export { default as BaseController } from './common/BaseController.js';

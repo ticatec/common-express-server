@@ -24,8 +24,8 @@ export default abstract class AdminBaseController<T> extends CommonController<T>
      * @returns Array containing request body as the only argument
      * @protected
      */
-    protected getCreateNewArguments(req: Request):Array<any> {
-        return [req.body]
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [req.body];
     }
 
     /**
@@ -34,7 +34,7 @@ export default abstract class AdminBaseController<T> extends CommonController<T>
      * @returns Array containing request body as the only argument
      * @protected
      */
-    protected getUpdateArguments(req: Request) {
-        return [req.body]
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [req.body];
     }
 }

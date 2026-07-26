@@ -1,7 +1,6 @@
 import {Express, NextFunction, Request, RequestHandler, Response, Router} from "express";
 import {getLogger, Logger} from "@ticatec/logger-wrapper";
 import {UnauthenticatedError} from "@ticatec/node-exception";
-import LoggedUser, {CommonUser} from "./LoggedUser.js";
 
 /**
  * Abstract base class for defining common routes
@@ -51,6 +50,11 @@ import LoggedUser, {CommonUser} from "./LoggedUser.js";
  * }
  * ```
  */
+import { RegisteredUser } from "./LoggedUser.js";
+
+/**
+ * Abstract base class for defining common routes
+ */
 export default class CommonRoutes {
 
     /** Express router instance */
@@ -98,9 +102,9 @@ export default class CommonRoutes {
         }
         this.router.use(async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const user = req['user'] as LoggedUser;
-                if (!await this.isValidUser(user?.actAs ?? user)) {
-                    this.logger.debug(`User validation failed: ${JSON.stringify(user)}`);
+                const user = req['user'] as RegisteredUser;
+                if (!await this.isValidUser((user as any)?.actAs ?? user)) {
+                    this.logger.debug({ user }, 'User validation failed');
                     next(new UnauthenticatedError());
                 } else {
                     next();
@@ -108,7 +112,6 @@ export default class CommonRoutes {
             } catch (error) {
                 next(error);
             }
-
         });
         const globalHandler = this.getGlobalHandler();
         if (globalHandler) {
@@ -176,66 +179,16 @@ export default class CommonRoutes {
      * }
      * ```
      */
-    protected userCheck(_user: CommonUser): boolean | Promise<boolean> {
+    protected userCheck(_user: RegisteredUser): boolean | Promise<boolean> {
         return true;
     }
 
-    /**
-     * Performs custom user validation check
-     *
-     * Override this method to implement custom user validation logic.
-     * This method is called after the user hook (if any) and before the global middleware.
-     * It receives the user object (or the actAs user if impersonation is active) and
-     * should return true if the user is valid, or false/throw an error otherwise.
-     *
-     * When this method returns false, an UnauthenticatedError is thrown automatically.
-     * If an error is thrown, it will be passed to Express's error handling middleware.
-     *
-     * This is useful for:
-     * - Additional authorization checks beyond authentication
-     * - Validating user permissions or roles
-     * - Checking account status (e.g., active, suspended)
-     * - Tenant-specific validation
-     * - Custom business rules for user access
-     *
-     * @param _user The user object to validate (will be user.actAs if impersonation is active)
-     * @returns true if the user passes validation, false otherwise
-     * @protected
-     *
-     * @example
-     * ```typescript
-     * // Check if user account is active
-     * protected async isValidUser(user: CommonUser): Promise<boolean> {
-     *   if (!user) {
-     *     return false;
-     *   }
-     *   const account = await database.getAccount(user.accountCode);
-     *   return account && account.status === 'active';
-     * }
-     * ```
-     *
-     * @example
-     * ```typescript
-     * // Check if user has required role
-     * protected isValidUser(user: CommonUser): boolean {
-     *   return user && user.roles && user.roles.includes('admin');
-     * }
-     * ```
-     *
-     * @example
-     * ```typescript
-     * // Check tenant-specific access
-     * protected async isValidUser(user: CommonUser): Promise<boolean> {
-     *   if (!user || !user.tenant) {
-     *     return false;
-     *   }
-     *   const tenant = await database.getTenant(user.tenant.code);
-     *   return tenant && tenant.isActive;
-     * }
-     * ```
-     * */
-    protected isValidUser(_user: CommonUser): boolean | Promise<boolean> {
+    protected isValidUser(_user: RegisteredUser): boolean | Promise<boolean> {
         return true;
+    }
+
+    protected getUserHook(): ((user: RegisteredUser) => RegisteredUser | Promise<RegisteredUser>) | null {
+        return null;
     }
 
     /**
@@ -426,41 +379,7 @@ export default class CommonRoutes {
      * - Preparing user data before validation
      *
      * @returns A function that processes the user object, or null if no hook is needed
-     * @protected
-     *
-     * @example
-     * ```typescript
-     * protected getUserHook(): ((user: any) => any) | null {
-     *   return async (user) => {
-     *     if (user) {
-     *       // Load additional user data BEFORE validation
-     *       user.preferences = await loadUserPreferences(user.accountCode);
-     *       user.permissions = await loadUserPermissions(user.accountCode);
-     *       user.profile = await loadUserProfile(user.accountCode);
-     *     }
-     *     return user;
-     *   };
-     * }
-     * ```
-     *
-     * @example
-     * ```typescript
-     * // Load tenant-specific settings before isValidUser validates them
-     * protected getUserHook(): ((user: any) => any) | null {
-     *   return async (user) => {
-     *     if (user && user.tenant) {
-     *       // Enrich user object with tenant data
-     *       user.tenantSettings = await loadTenantSettings(user.tenant.code);
-     *       user.tenant.isActive = user.tenantSettings.status === 'active';
-     *     }
-     *     return user;
-     *   };
-     * }
-     * ```
      */
-    protected getUserHook(): ((user: any) => any) | null {
-        return null;
-    }
 }
 
 /**
@@ -468,7 +387,7 @@ export default class CommonRoutes {
  * Automatically rejects requests with 401 UnauthenticatedError if user is not logged in.
  */
 export class AuthenticatedRoutes extends CommonRoutes {
-    protected isValidUser(user: CommonUser): boolean | Promise<boolean> {
+    protected isValidUser(user: RegisteredUser): boolean | Promise<boolean> {
         return user != null;
     }
 }
