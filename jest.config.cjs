@@ -9,9 +9,7 @@ module.exports = {
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        module: 'commonjs'
-      },
+      tsconfig: 'tsconfig.cjs.json',
       diagnostics: {
         ignoreCodes: [151002]
       }

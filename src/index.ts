@@ -16,6 +16,11 @@ export { default as TenantBaseController } from './common/TenantBaseController.j
 export { default as AdminSearchController } from './common/AdminSearchController.js';
 export { default as TenantSearchController } from './common/TenantSearchController.js';
 
+export { HealthCheckRegistry } from './health/HealthCheckRegistry.js';
+export { HealthRoutes } from './health/HealthRoutes.js';
+export { createSystemHealthIndicator } from './health/BuiltinHealthIndicators.js';
+export type { HealthStatus, HealthCheckResult, HealthCheckIndicator, RegisteredCheck, ReadinessResponse } from './health/HealthCheckRegistry.js';
+
 export type { RestfulFunction, ControlFunction } from './RouterHelper.js';
 export type { moduleLoader } from './BaseServer.js';
 

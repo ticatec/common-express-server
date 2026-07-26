@@ -5,6 +5,9 @@ import http from "http";
 import net from "net";
 import {getLogger, Logger} from "@ticatec/logger-wrapper";
 import CommonRoutes from "./CommonRoutes.js";
+import { HealthCheckRegistry, HealthCheckIndicator } from "./health/HealthCheckRegistry.js";
+import { createSystemHealthIndicator } from "./health/BuiltinHealthIndicators.js";
+import { HealthRoutes } from "./health/HealthRoutes.js";
 
 /**
  * Function signature for module loader
@@ -24,11 +27,27 @@ export default abstract class BaseServer {
     protected contextRoot: string;
     protected app: Express;
     protected httpServer: http.Server = null;
+    /** Health check registry for application probe indicators */
+    protected healthRegistry: HealthCheckRegistry;
 
     /**
      * Constructor for base server
      */
     constructor() {
+        this.healthRegistry = new HealthCheckRegistry();
+        // Register default system health indicator
+        this.healthRegistry.register('system', createSystemHealthIndicator());
+    }
+
+    /**
+     * Registers a custom health check indicator probe
+     * @param name Unique check name (e.g. 'database', 'redis')
+     * @param indicator Check indicator returning HealthCheckResult
+     * @param isCritical Whether failure of this check marks overall status as DOWN (default: true)
+     * @param timeoutMs Timeout in milliseconds for this check (default: 3000ms)
+     */
+    registerHealthCheck(name: string, indicator: HealthCheckIndicator, isCritical: boolean = true, timeoutMs: number = 3000): void {
+        this.healthRegistry.register(name, indicator, isCritical, timeoutMs);
     }
 
     /**
@@ -101,26 +120,15 @@ export default abstract class BaseServer {
     }
 
     /**
-     * Gets the health check endpoint path
-     * @returns The health check path
+     * Adds health check endpoints (/health/live, /health/ready, /health) to the Express app
      * @protected
      */
-    protected getHealthCheckPath(): string {
-        return '/health-check';
-    }
-
-    /**
-     * Adds health check endpoint to the Express app
-     * @protected
-     */
-    protected addHealthCheck() {
-        const path = this.getHealthCheckPath();
-        this.logger.debug({ path }, 'Loading system health check');
-        if (path) {
-            this.app.get(path, (_req: Request, res: Response) => {
-                res.send('');
-            });
-        }
+    protected async addHealthCheck() {
+        const webConf = this.getWebConf?.() || {};
+        const healthPrefix = webConf.healthPath || '/health';
+        this.logger.debug({ healthPrefix }, 'Mounting health check subsystem routes');
+        const healthRoutes = new HealthRoutes(this.healthRegistry);
+        await healthRoutes.bind(this.app, healthPrefix);
     }
 
     /**
@@ -135,7 +143,7 @@ export default abstract class BaseServer {
         const routerHelper = (await import("./RouterHelper.js")).default;
         app.use(routerHelper.setNoCache);
         this.app = app;
-        this.addHealthCheck();
+        await this.addHealthCheck();
         this.setupExpress();
         await this.bindStaticSite();
         app.use(routerHelper.retrieveUser());

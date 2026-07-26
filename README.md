@@ -67,6 +67,35 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
+### 3. Cloud-Native Health Check
+
+The framework includes built-in Kubernetes probe endpoints by default:
+- `GET /health/live`: Liveness Probe (HTTP 200 when process is running).
+- `GET /health/ready`: Readiness Probe (HTTP 200 when all critical components pass, HTTP 503 if any critical component is DOWN).
+- `GET /health`: Comprehensive aggregate status view.
+
+Register custom health indicators (e.g. Database, Redis):
+
+```typescript
+class MyServer extends BaseServer {
+    protected async beforeStart(): Promise<void> {
+        // Register Database Health Indicator
+        this.registerHealthCheck('database', async () => {
+            const isOk = await db.ping();
+            return {
+                status: isOk ? 'UP' : 'DOWN',
+                details: { latencyMs: 5 }
+            };
+        }, true); // true marks component as critical (returns HTTP 503 if DOWN)
+
+        // Register Non-Critical Component (e.g. Cache)
+        this.registerHealthCheck('redis', async () => {
+            return { status: 'UP' };
+        }, false);
+    }
+}
+```
+
 ### 2. Create Routes
 
 ```typescript
@@ -338,7 +367,7 @@ Abstract base server class that provides:
 - Configuration loading
 - Route binding
 - Error handling
-- Health check endpoint
+- Health check endpoints (/health/live, /health/ready)
 - Static file serving
 - **Global user parsing** (non-invasive, for all requests)
 
@@ -346,16 +375,16 @@ Abstract base server class that provides:
 **Global Middleware Order:**
 ```
 1. SetNoCache              - Disable caching
-2. HealthCheck             - /health-check endpoint
-3. RetrieveUser (Global)   - Parse user from headers (non-invasive)
-4. Routes                  - All route definitions
+2. HealthCheck             - /health/live, /health/ready, /health endpoints
+3. RetrieveUser (Global)   - Extract user info from headers (non-blocking)
+4. Routes                  - All defined routes
 5. ActionNotFound          - 404 handler
 6. Error Handler           - Error handling
 ```
 
 ### RouterHelper (Singleton)
 
-Middleware utilities for:
+Middleware helper for:
 - JSON response formatting
 - Cache control
 - User authentication
@@ -369,24 +398,24 @@ import { routerHelper } from '@ticatec/common-express-server';
 // Use middleware
 routerHelper.setNoCache           // Disable caching
 routerHelper.checkLoggedUser()    // Require authentication
-routerHelper.retrieveUser()       // Parse user (non-invasive)
+routerHelper.retrieveUser()       // Extract user (non-blocking)
 routerHelper.actionNotFound()     // 404 handler
-routerHelper.invokeRestfulAction() // Wrap async handlers
-routerHelper.invokeController()    // Wrap controller handlers
+routerHelper.invokeRestfulAction() // Wrap async handler
+routerHelper.invokeController()    // Wrap controller handler
 ```
 
 ### CommonRoutes
 
-Base class for route definitions with:
-- Express router integration
+Base class for route definitions featuring:
+- Express Router integration
 - Flexible authentication control
 - Custom user validation checks
 - User hook support
 - Global middleware support
 - Logging capabilities
-- Built-in HTTP method helpers
+- Built-in HTTP method helper methods
 
-**Middleware Order:**
+**Middleware Execution Order:**
 ```
 1. getUserHook()           - Process and enrich user data
 2. isValidUser()             - Custom user validation
@@ -400,16 +429,16 @@ Base class for route definitions with:
 - `getGlobalHandler(): RequestHandler | null` - Custom middleware
 - `bindRoutes()` - Define your routes
 
-### Controllers Hierarchy
+### Controller Hierarchy
 
-- **BaseController<T>**: Basic controller with logging and user context
+- **BaseController<T>**: Base controller with logging and user context
 - **CommonController<T>**: CRUD operations with validation
-- **AdminBaseController<T>**: Admin-specific operations (tenant-independent)
+- **AdminBaseController<T>**: Admin-specific operations (tenant-agnostic)
 - **TenantBaseController<T>**: Tenant-specific operations
 - **AdminSearchController<T>**: Admin search operations
 - **TenantSearchController<T>**: Tenant search operations
 
-📚 **[Complete Controller Guide →](./CONTROLLER.md)**
+📚 **[Full Controller Usage Guide →](./CONTROLLER.md)**
 
 ## Architecture Overview
 
@@ -420,9 +449,9 @@ Base class for route definitions with:
 │                    BaseServer Middleware                    │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. SetNoCache              - Disable caching                │
-│ 2. HealthCheck             - /health-check endpoint         │
-│ 3. RetrieveUser (Global)   - Parse user from headers        │
-│ 4. Routes                  - All route definitions          │
+│ 2. HealthCheck             - /health/live, /health/ready    │
+│ 3. RetrieveUser (Global)   - Extract user info from headers │
+│ 4. Routes                  - All defined routes             │
 │ 5. ActionNotFound          - 404 handler                    │
 │ 6. Error Handler           - Error handling                 │
 └─────────────────────────────────────────────────────────────┘
@@ -629,7 +658,8 @@ npm run dev           # Development mode with watch
 - `@ticatec/bean-validator`: Data validation
 - `@ticatec/express-exception`: Error handling
 - `@ticatec/node-common-library`: Common utilities
-- `log4js`: Logging framework
+- `@ticatec/logger-wrapper`: Pino logging wrapper
+- `pino`: High-performance structured logging framework
 
 ## Contributing
 

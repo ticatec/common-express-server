@@ -67,6 +67,35 @@ const server = new MyServer();
 BaseServer.startup(server);
 ```
 
+### 3. 云原生健康检查 (Health Check)
+
+框架内置云原生与 K8s 标准的健康检查子系统，默认自动暴露免认证探针端点：
+- `GET /health/live`: 存活探针 (Liveness Probe)，进程在线即返回 HTTP 200。
+- `GET /health/ready`: 就绪探针 (Readiness Probe)，汇总所有关键探针，全部正常返回 HTTP 200，任一关键项 DOWN 返回 HTTP 503。
+- `GET /health`: 综合健康视图。
+
+注册自定义组件探针（如数据库、Redis）：
+
+```typescript
+class MyServer extends BaseServer {
+    protected async beforeStart(): Promise<void> {
+        // 注册数据库健康检查
+        this.registerHealthCheck('database', async () => {
+            const isOk = await db.ping();
+            return {
+                status: isOk ? 'UP' : 'DOWN',
+                details: { latencyMs: 5 }
+            };
+        }, true); // true 表示关键组件，DOWN 时 ready 端点将返回 503
+
+        // 注册非关键组件（如缓存）
+        this.registerHealthCheck('redis', async () => {
+            return { status: 'UP' };
+        }, false);
+    }
+}
+```
+
 ### 2. 创建路由
 
 ```typescript
@@ -346,7 +375,7 @@ class UserController extends TenantBaseController<UserService> {
 **全局中间件顺序：**
 ```
 1. SetNoCache              - 禁用缓存
-2. HealthCheck             - /health-check 端点
+2. HealthCheck             - /health/live, /health/ready, /health 端点
 3. RetrieveUser (全局)     - 从请求头解析用户信息（非侵入式）
 4. Routes                  - 所有路由定义
 5. ActionNotFound          - 404 处理器
@@ -420,7 +449,7 @@ routerHelper.invokeController()    // 包装控制器处理器
 │                    BaseServer 中间件                        │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. SetNoCache              - 禁用缓存                        │
-│ 2. HealthCheck             - /health-check 端点              │
+│ 2. HealthCheck             - /health/live, /health/ready    │
 │ 3. RetrieveUser (全局)     - 从请求头解析用户信息            │
 │ 4. Routes                  - 所有路由定义                    │
 │ 5. ActionNotFound          - 404 处理器                      │
@@ -629,7 +658,8 @@ npm run dev           # 开发模式（监听）
 - `@ticatec/bean-validator`: 数据验证
 - `@ticatec/express-exception`: 错误处理
 - `@ticatec/node-common-library`: 通用工具
-- `log4js`: 日志框架
+- `@ticatec/logger-wrapper`: Pino 日志封装
+- `pino`: 高性能结构化日志框架
 
 ## 贡献
 

@@ -12,6 +12,9 @@ import TenantBaseController from '../common/TenantBaseController.js';
 import TenantSearchController from '../common/TenantSearchController.js';
 import CommonRoutes, { AuthenticatedRoutes } from '../CommonRoutes.js';
 import BaseServer from '../BaseServer.js';
+import { HealthCheckRegistry } from '../health/HealthCheckRegistry.js';
+import { createSystemHealthIndicator } from '../health/BuiltinHealthIndicators.js';
+import { HealthRoutes } from '../health/HealthRoutes.js';
 
 class MockProcessor extends CommonProcessor<string> {
     public processedItems: string[] = [];
@@ -290,5 +293,132 @@ describe('common-express-server comprehensive test suite', () => {
         const user = ctrl.getUser(mockReq);
         expect(user.accountCode).toBe('U999');
         expect(user.name).toBe('ServerUser');
+    });
+
+    describe('Health Check Subsystem', () => {
+        test('should execute checkLiveness and checkReadiness on HealthCheckRegistry', async () => {
+            const registry = new HealthCheckRegistry();
+            registry.register('system', createSystemHealthIndicator());
+
+            const liveness = registry.checkLiveness();
+            expect(liveness.status).toBe('UP');
+            expect(liveness.details.uptime).toBeGreaterThanOrEqual(0);
+
+            const readiness = await registry.checkReadiness();
+            expect(readiness.status).toBe('UP');
+            expect(readiness.checks.system.status).toBe('UP');
+        });
+
+        test('should execute checks concurrently and handle timeout protection for slow/hung probes', async () => {
+            const registry = new HealthCheckRegistry();
+
+            // Fast check
+            registry.register('fast', async () => ({ status: 'UP' }), true, 1000);
+
+            // Hung check (never resolves)
+            registry.register('hung', () => new Promise(() => {}), true, 50);
+
+            const startTime = Date.now();
+            const readiness = await registry.checkReadiness();
+            const elapsedTime = Date.now() - startTime;
+
+            expect(elapsedTime).toBeLessThan(300); // Should resolve around 50ms without hanging
+            expect(readiness.status).toBe('DOWN');
+            expect(readiness.checks.fast.status).toBe('UP');
+            expect(readiness.checks.hung.status).toBe('DOWN');
+            expect(readiness.checks.hung.error).toContain('timed out after 50ms');
+        });
+
+        test('should return DOWN and overall status DOWN when a critical check fails', async () => {
+            const registry = new HealthCheckRegistry();
+            registry.register('db', async () => ({
+                status: 'DOWN',
+                error: 'DB Connection Error'
+            }), true);
+
+            const readiness = await registry.checkReadiness();
+            expect(readiness.status).toBe('DOWN');
+            expect(readiness.checks.db.status).toBe('DOWN');
+            expect(readiness.checks.db.error).toBe('DB Connection Error');
+        });
+
+        test('should return DEGRADED when non-critical check is DOWN or DEGRADED', async () => {
+            const registry = new HealthCheckRegistry();
+            registry.register('cache', async () => ({
+                status: 'DOWN',
+                error: 'Cache connection dropped'
+            }), false); // non-critical
+
+            const readiness = await registry.checkReadiness();
+            // Overall status MUST be DEGRADED (not UP and not DOWN)
+            expect(readiness.status).toBe('DEGRADED');
+            expect(readiness.checks.cache.status).toBe('DOWN');
+
+            // Verify HTTP handler returns 200 for DEGRADED
+            const routes = new HealthRoutes(registry);
+            const mockRes: any = {
+                statusCode: 200,
+                status: function(code: number) { this.statusCode = code; return this; },
+                json: function(data: any) { this.body = data; return this; }
+            };
+            await (routes as any).getReadinessCustomHandler({}, mockRes);
+            expect(mockRes.statusCode).toBe(200);
+            expect(mockRes.body.status).toBe('DEGRADED');
+        });
+
+        test('should validate timeoutMs parameter and throw on invalid values', () => {
+            const registry = new HealthCheckRegistry();
+            const dummyIndicator = async () => ({ status: 'UP' as const });
+
+            expect(() => registry.register('t1', dummyIndicator, true, 0)).toThrow("Invalid timeoutMs '0': Must be a positive finite number.");
+            expect(() => registry.register('t2', dummyIndicator, true, -500)).toThrow("Invalid timeoutMs '-500': Must be a positive finite number.");
+            expect(() => registry.register('t3', dummyIndicator, true, NaN)).toThrow("Invalid timeoutMs 'NaN': Must be a positive finite number.");
+            expect(() => registry.register('t4', dummyIndicator, true, Infinity)).toThrow("Invalid timeoutMs 'Infinity': Must be a positive finite number.");
+        });
+
+        test('should omit details and sanitize error strings in production mode', async () => {
+            const oldEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'production';
+
+            const registry = new HealthCheckRegistry();
+            registry.register('redis', async () => ({
+                status: 'DOWN',
+                error: 'Secret stack trace with Authorization: Bearer abc123secret and dsn=redis://user:pass@127.0.0.1:6379',
+                details: {
+                    host: '127.0.0.1',
+                    password: 'secretpass',
+                    token: 'bearer-token'
+                }
+            }));
+
+            const readiness = await registry.checkReadiness();
+            expect(readiness.status).toBe('DOWN');
+            expect(readiness.checks.redis.error).toBe('Health check failed');
+            expect(readiness.checks.redis.details).toBeUndefined();
+
+            process.env.NODE_ENV = oldEnv;
+        });
+
+        test('should register custom health check on BaseServer and expose HealthRoutes', async () => {
+            const server = new TestServer();
+            server.registerHealthCheck('custom', async () => ({ status: 'UP' }));
+
+            const registry = (server as any).healthRegistry as HealthCheckRegistry;
+            expect(registry.getRegisteredNames()).toContain('system');
+            expect(registry.getRegisteredNames()).toContain('custom');
+
+            const routes = new HealthRoutes(registry);
+            const mockReq: any = {};
+            const mockRes: any = {
+                statusCode: 200,
+                status: function(code: number) { this.statusCode = code; return this; },
+                json: function(data: any) { this.body = data; return this; }
+            };
+
+            await (routes as any).getReadinessCustomHandler(mockReq, mockRes);
+            expect(mockRes.statusCode).toBe(200);
+            expect(mockRes.body.status).toBe('UP');
+            expect(mockRes.body.checks.custom.status).toBe('UP');
+        });
     });
 });
