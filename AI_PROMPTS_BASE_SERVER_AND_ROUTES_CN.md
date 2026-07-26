@@ -4,6 +4,24 @@
 
 ---
 
+## 🏛️ 应用四层分层架构规范 (Four-Tier Architecture)
+
+在编写或生成业务代码时，必须遵循以下**四层分层架构**职责边界：
+
+1. **Web 层 (`routes` + `controller`)**:
+   - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): 处理 HTTP 路由映射、请求头校验、中间件绑定与认证 (`isValidUser`)。
+   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
+2. **Service 业务逻辑层 (`service`)**:
+   - 处理核心业务逻辑、领域校验、状态转换与事务（Transaction）管理。
+   - 依赖 **Repository 层** 进行领域数据的读取与持久化操作。
+3. **Repository 仓储层 (`repository`)**:
+   - 负责数据访问抽象，屏蔽底层数据库实现细节，组装 PO/DTO 与领域模型。
+   - 协调调用一个或多个 **DAO 层** 执行数据聚合。
+4. **DAO 数据访问层 (`dao`)**:
+   - 负责最底层的数据库通信与 SQL / ORM 执行（如基于 `@ticatec/pg-common-library` 或数据库连接池执行具体增删改查）。
+
+---
+
 ## Prompt 1: 创建自定义服务器类
 
 ```
@@ -33,23 +51,18 @@
 ## Prompt 2: 创建带认证的路由类
 
 ```
-请帮我创建一个继承自 CommonRoutes 的路由类，用于用户管理。要求如下：
+请帮我创建一个继承自 AuthenticatedRoutes 的保护路由类，用于用户个人中心。要求如下：
 
-1. 类名为 UserRoutes，构造函数不需要参数
-2. 实现 isValidUser() 方法，验证用户是否已登录且账户状态为 'active'
-3. 实现 bindRoutes() 方法，定义以下路由：
+1. 类名为 ProtectedUserRoutes，直接继承自 AuthenticatedRoutes（默认拒绝匿名请求）
+2. 实现 bindRoutes() 方法，定义以下路由：
    - GET /profile - 获取当前用户资料
    - PUT /profile - 更新用户资料
    - POST /change-password - 修改密码
-   - GET /settings - 获取用户设置
-4. 使用 routerHelper.invokeRestfulAction() 包装所有路由处理器
-5. 所有处理器使用箭头函数定义为类属性
-6. 添加适当的日志记录
+3. 使用 routerHelper.invokeRestfulAction() 包装所有路由处理器
+4. 在项目中配合 CustomUserRegistry 声明全局用户 AppUser
 
 请确保：
-- 从 req['user'] 获取用户信息
-- 处理用户模拟（actAs）场景
-- 返回标准的 RESTful 响应
+- 无需手动在 isValidUser 中判定 user 非空（AuthenticatedRoutes 自动完成）
 - 使用 this.logger 记录操作日志
 ```
 

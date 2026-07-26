@@ -65,9 +65,9 @@ class MyController extends BaseController<UserService> {
 
 ### 关键方法
 
-#### `getLoggedUser(req: Request): CommonUser`
+#### `getLoggedUser(req: Request): RegisteredUser`
 
-返回当前登录用户。如果激活了用户扮演（`actAs`），返回被扮演的用户。
+返回当前登录用户。如果激活了用户扮演（`actAs`），返回被扮演的用户。返回类型自动推导为 `RegisteredUser`。
 
 ```typescript
 const user = this.getLoggedUser(req);
@@ -75,6 +75,29 @@ console.log(user.accountCode);  // 用户账号代码
 console.log(user.name);         // 用户姓名
 console.log(user.tenant);       // 租户信息（如果适用）
 ```
+
+#### Server 级别自定义用户类型 (`CustomUserRegistry`)
+
+框架支持通过 TypeScript 模块声明扩展（Declaration Merging）在 Server 级别绑定应用专属的 `AppUser`：
+
+```typescript
+// src/types/user-registry.d.ts
+import { LoggedUser } from '@ticatec/common-express-server';
+
+export interface AppUser extends LoggedUser {
+    userId: string;
+    roles: string[];
+    permissions: string[];
+}
+
+declare module '@ticatec/common-express-server' {
+    interface CustomUserRegistry {
+        user: AppUser;
+    }
+}
+```
+
+绑定后，所有继承自 `BaseController`、`CommonController`、`TenantBaseController` 等基类的控制器中，`this.getLoggedUser(req)` 及自动透传至服务层的第一个用户参数，均会**自动享受 `AppUser` 的强类型推导**。
 
 ## CommonController
 

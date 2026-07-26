@@ -65,9 +65,9 @@ class MyController extends BaseController<UserService> {
 
 ### Key Methods
 
-#### `getLoggedUser(req: Request): CommonUser`
+#### `getLoggedUser(req: Request): RegisteredUser`
 
-Returns the current logged user. If user impersonation is active (`actAs`), returns the impersonated user.
+Returns the current logged user. If user impersonation is active (`actAs`), returns the impersonated user. The return type automatically resolves to `RegisteredUser`.
 
 ```typescript
 const user = this.getLoggedUser(req);
@@ -75,6 +75,29 @@ console.log(user.accountCode);  // User's account code
 console.log(user.name);         // User's name
 console.log(user.tenant);       // Tenant info (if applicable)
 ```
+
+#### Server-Wide Custom User Model (`CustomUserRegistry`)
+
+The framework supports binding an application-specific `AppUser` model at the server level via TypeScript declaration merging:
+
+```typescript
+// src/types/user-registry.d.ts
+import { LoggedUser } from '@ticatec/common-express-server';
+
+export interface AppUser extends LoggedUser {
+    userId: string;
+    roles: string[];
+    permissions: string[];
+}
+
+declare module '@ticatec/common-express-server' {
+    interface CustomUserRegistry {
+        user: AppUser;
+    }
+}
+```
+
+Once registered, `this.getLoggedUser(req)` and user parameters passed to service methods in all controllers (`BaseController`, `CommonController`, `TenantBaseController`, etc.) will **automatically infer as `AppUser`** without needing generics on every controller!
 
 ## CommonController
 

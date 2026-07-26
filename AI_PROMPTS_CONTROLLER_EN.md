@@ -4,6 +4,43 @@ This document provides detailed prompts for AI-assisted programming to help deve
 
 ---
 
+## 🏛️ Four-Tier Architecture Overview
+
+When developing applications or writing code with AI assistance, strictly adhere to the following **Four-Tier Architecture**:
+
+1. **Web Layer (`routes` + `controller`)**:
+   - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): Handles HTTP route binding, header validation, middleware registration, and authentication (`isValidUser`).
+   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
+2. **Service Layer (`service`)**:
+   - Handles core business rules, domain validation, state transitions, and transaction management.
+   - Interacts with the **Repository Layer** for domain entity retrieval and persistence.
+3. **Repository Layer (`repository`)**:
+   - Encapsulates data access abstractions, masking database-specific details.
+   - Assembles POs/DTOs and domain models by orchestrating one or multiple **DAO Layers**.
+4. **DAO Layer (`dao`)**:
+   - Executes low-level database operations, raw SQL queries, or ORM calls (e.g. using `@ticatec/pg-common-library` or DB drivers).
+
+---
+
+## Prompt 0: Register Server-Wide Custom User Model via CustomUserRegistry
+
+```
+Please help me register a server-wide custom user model for @ticatec/common-express-server in my TypeScript project. Requirements:
+
+1. Create file src/types/user-registry.d.ts
+2. Define interface AppUser extending LoggedUser with properties:
+   - userId: string
+   - roles: string[]
+   - permissions: string[]
+   - departmentId: string
+3. Use declare module '@ticatec/common-express-server' for TypeScript declaration merging
+4. Register user: AppUser inside CustomUserRegistry
+
+Generate complete code and explain how this.getLoggedUser(req) across all controllers (e.g. TenantBaseController) will automatically infer as AppUser.
+```
+
+---
+
 ## Prompt 1: Create Basic Controller with Controller (No Service Injection)
 
 ```
@@ -403,13 +440,13 @@ Please generate complete code for all controllers and route classes, including:
 ## Controller Hierarchy Quick Reference
 
 ```
-Controller (Base Functionality)
-├── BaseController<T> (Service Injection)
-    └── CommonController<T> (CRUD + Validation)
-        ├── AdminBaseController<T> (Admin, No Tenant)
-        │   └── AdminSearchController<T> (Admin Search)
-        └── TenantBaseController<T> (Tenant-Specific)
-            └── TenantSearchController<T> (Tenant Search)
+Controller (Base Functionality)  
+  ├── BaseController<T> (Service Injection)  
+  └── CommonController<T> (CRUD + Validation)  
+    ├── AdminBaseController<T> (Admin, No Tenant)  
+    │ └── AdminSearchController<T> (Admin Search)  
+    └── TenantBaseController<T> (Tenant-Specific)  
+      └── TenantSearchController<T> (Tenant Search)  
 ```
 
 ### Service Method Signatures by Controller:

@@ -4,6 +4,41 @@
 
 ---
 
+## 🏛️ 应用四层分层架构规范 (Four-Tier Architecture)
+
+在编写或生成业务代码时，必须遵循以下**四层分层架构**职责边界：
+
+1. **Web 层 (`routes` + `controller`)**:
+   - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): 处理 HTTP 路由映射、请求头校验、中间件绑定与认证 (`isValidUser`)。
+   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
+2. **Service 业务逻辑层 (`service`)**:
+   - 处理核心业务逻辑、领域校验、状态转换与事务（Transaction）管理。
+   - 依赖 **Repository 层** 进行领域数据的读取与持久化操作。
+3. **Repository 仓储层 (`repository`)**:
+   - 负责数据访问抽象，屏蔽底层数据库实现细节，组装 PO/DTO 与领域模型。
+   - 协调调用一个或多个 **DAO 层** 执行数据聚合。
+4. **DAO 数据访问层 (`dao`)**:
+   - 负责最底层的数据库通信与 SQL / ORM 执行（如基于 `@ticatec/pg-common-library` 或数据库连接池执行具体增删改查）。
+
+---
+
+```
+请帮我在 TypeScript 项目中为 @ticatec/common-express-server 注册 Server 级别的自定义用户类型。要求如下：
+
+1. 创建文件 src/types/user-registry.d.ts
+2. 定义接口 AppUser 继承自 LoggedUser，包含属性：
+   - userId: string
+   - roles: string[]
+   - permissions: string[]
+   - departmentId: string
+3. 使用 declare module '@ticatec/common-express-server' 进行 TypeScript 模块扩展（Declaration Merging）
+4. 在 CustomUserRegistry 中注册 user: AppUser
+
+请生成完整的代码，并说明之后框架内所有 Controller（如 TenantBaseController）中 this.getLoggedUser(req) 将自动推导为 AppUser。
+```
+
+---
+
 ## Prompt 1: 使用 Controller 创建最基础的控制器（无需服务注入）
 
 ```
@@ -403,13 +438,13 @@ interface SearchResult<T> {
 ## Controller 层次结构快速参考
 
 ```
-Controller (基础功能)
-├── BaseController<T> (服务注入)
-    └── CommonController<T> (CRUD + 验证)
-        ├── AdminBaseController<T> (管理员，无租户)
-        │   └── AdminSearchController<T> (管理员搜索)
-        └── TenantBaseController<T> (租户特定)
-            └── TenantSearchController<T> (租户搜索)
+Controller (基础功能)  
+├── BaseController<T> (服务注入)  
+    └── CommonController<T> (CRUD + 验证)  
+        ├── AdminBaseController<T> (管理员，无租户)  
+        │   └── AdminSearchController<T> (管理员搜索)  
+        └── TenantBaseController<T> (租户特定)  
+            └── TenantSearchController<T> (租户搜索)  
 ```
 
 ### 各控制器的服务方法签名：

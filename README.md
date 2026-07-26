@@ -138,6 +138,48 @@ class AdminRoutes extends CommonRoutes {
 }
 ```
 
+#### Authenticated Routes (AuthenticatedRoutes)
+
+Extending `AuthenticatedRoutes` enforces that requests must contain a valid logged-in user (`user != null`). Unauthenticated requests automatically trigger a `401 UnauthenticatedError`:
+
+```typescript
+import { AuthenticatedRoutes, routerHelper } from '@ticatec/common-express-server';
+
+class ProtectedUserRoutes extends AuthenticatedRoutes {
+    protected bindRoutes() {
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
+    }
+
+    private getProfile = async (req: Request) => {
+        // req['user'] is guaranteed to be non-null
+        return req['user'];
+    };
+}
+```
+
+#### Server-Wide Custom User Model (CustomUserRegistry)
+
+For applications with extended user attributes (e.g., `userId`, `roles`, `permissions`), you can bind a server-wide user model via TypeScript module augmentation (Declaration Merging):
+
+```typescript
+// types/user-registry.d.ts
+import { LoggedUser } from '@ticatec/common-express-server';
+
+export interface AppUser extends LoggedUser {
+    userId: string;
+    roles: string[];
+    permissions: string[];
+}
+
+declare module '@ticatec/common-express-server' {
+    interface CustomUserRegistry {
+        user: AppUser;
+    }
+}
+```
+
+Once registered, `this.getLoggedUser(req)` across all controllers, `TenantBaseController` arguments, and route user hooks will **automatically infer as `AppUser`**, avoiding generic boilerplate on every controller!
+
 #### Custom User Validation
 
 The `isValidUser()` method allows you to implement custom validation logic beyond authentication:

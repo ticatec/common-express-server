@@ -138,6 +138,48 @@ class AdminRoutes extends CommonRoutes {
 }
 ```
 
+#### 需认证路由 (AuthenticatedRoutes)
+
+继承 `AuthenticatedRoutes` 可要求请求必须包含有效登录用户（`user != null`），未登录请求会自动由中间件抛出 `401 UnauthenticatedError`：
+
+```typescript
+import { AuthenticatedRoutes, routerHelper } from '@ticatec/common-express-server';
+
+class ProtectedUserRoutes extends AuthenticatedRoutes {
+    protected bindRoutes() {
+        this.get('/profile', routerHelper.invokeRestfulAction(this.getProfile));
+    }
+
+    private getProfile = async (req: Request) => {
+        // req['user'] 一定非空
+        return req['user'];
+    };
+}
+```
+
+#### Server 级别自定义用户类型 (CustomUserRegistry)
+
+对于有特定扩展属性（如 `userId`, `roles`, `permissions`）的用户模型，可以通过 TypeScript 模块声明扩展（Declaration Merging）在 Server 级别统一绑定：
+
+```typescript
+// types/user-registry.d.ts
+import { LoggedUser } from '@ticatec/common-express-server';
+
+export interface AppUser extends LoggedUser {
+    userId: string;
+    roles: string[];
+    permissions: string[];
+}
+
+declare module '@ticatec/common-express-server' {
+    interface CustomUserRegistry {
+        user: AppUser;
+    }
+}
+```
+
+绑定后，框架内所有 Controller 的 `this.getLoggedUser(req)`、`TenantBaseController` 参数及 `CommonRoutes` 的用户钩子将**自动推导为 `AppUser` 强类型**，无需在每个 Controller 上编写冗余泛型！
+
 #### 自定义用户验证
 
 `isValidUser()` 方法允许你在认证之外实现自定义验证逻辑：

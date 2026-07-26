@@ -4,6 +4,24 @@ This document provides detailed prompts for AI-assisted programming to help deve
 
 ---
 
+## 🏛️ Four-Tier Architecture Overview
+
+When developing applications or writing code with AI assistance, strictly adhere to the following **Four-Tier Architecture**:
+
+1. **Web Layer (`routes` + `controller`)**:
+   - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): Handles HTTP route binding, header validation, middleware registration, and authentication (`isValidUser`).
+   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
+2. **Service Layer (`service`)**:
+   - Handles core business rules, domain validation, state transitions, and transaction management.
+   - Interacts with the **Repository Layer** for domain entity retrieval and persistence.
+3. **Repository Layer (`repository`)**:
+   - Encapsulates data access abstractions, masking database-specific details.
+   - Assembles POs/DTOs and domain models by orchestrating one or multiple **DAO Layers**.
+4. **DAO Layer (`dao`)**:
+   - Executes low-level database operations, raw SQL queries, or ORM calls (e.g. using `@ticatec/pg-common-library` or DB drivers).
+
+---
+
 ## Prompt 1: Create Custom Server Class
 
 ```
@@ -33,23 +51,18 @@ Ensure:
 ## Prompt 2: Create Authenticated Route Class
 
 ```
-Please help me create a route class that extends CommonRoutes for user management. Requirements:
+Please help me create a protected route class that extends AuthenticatedRoutes for user profile operations. Requirements:
 
-1. Class name: UserRoutes, constructor takes no parameters
-2. Implement isValidUser() to verify user is logged in and account status is 'active'
-3. Implement bindRoutes() to define:
+1. Class name: ProtectedUserRoutes, extending AuthenticatedRoutes directly (rejects unauthenticated requests by default)
+2. Implement bindRoutes() to define:
    - GET /profile - Get current user profile
    - PUT /profile - Update user profile
    - POST /change-password - Change password
-   - GET /settings - Get user settings
-4. Use routerHelper.invokeRestfulAction() to wrap all route handlers
-5. Define all handlers as arrow function class properties
-6. Add appropriate logging
+3. Use routerHelper.invokeRestfulAction() to wrap all route handlers
+4. Leverage CustomUserRegistry to bind a server-wide AppUser model
 
 Ensure:
-- Get user information from req['user']
-- Handle user impersonation (actAs) scenarios
-- Return standard RESTful responses
+- No need to manually check user != null in isValidUser (handled automatically by AuthenticatedRoutes)
 - Use this.logger for operation logging
 ```
 
