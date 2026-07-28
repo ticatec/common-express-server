@@ -1,7 +1,11 @@
-import pino from 'pino';
 import { initialize, resetForTest } from '@ticatec/logger-wrapper';
 import http from 'http';
 import fs from 'fs';
+
+const SILENT_LOGGER_CONFIG = {
+    appenders: [{ name: 'console', type: 'console' as const, level: 'silent' }],
+    loggers: { root: { level: 'silent', appenders: ['console'] } }
+};
 import AppConf from '../AppConf.js';
 import ProcessorManager from '../ProcessorManager.js';
 import CommonProcessor from '../CommonProcessor.js';
@@ -116,7 +120,7 @@ class TestServer extends BaseServer {
 describe('common-express-server comprehensive test suite', () => {
     beforeAll(() => {
         resetForTest();
-        initialize(pino({ level: 'silent' }));
+        initialize(SILENT_LOGGER_CONFIG);
     });
 
     afterEach(() => {
@@ -401,7 +405,7 @@ describe('common-express-server comprehensive test suite', () => {
 
         test('should register custom health check on BaseServer and expose HealthRoutes', async () => {
             const server = new TestServer();
-            server.registerHealthCheck('custom', async () => ({ status: 'UP' }));
+            ((server as any).healthRegistry as HealthCheckRegistry).register('custom', async () => ({ status: 'UP' }));
 
             const registry = (server as any).healthRegistry as HealthCheckRegistry;
             expect(registry.getRegisteredNames()).toContain('system');

@@ -26,18 +26,14 @@
 ## 安装
 
 ```bash
-npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper
+npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper pino
 ```
-
-> `@ticatec/logger-wrapper` 已经把 `pino` 作为常规依赖打包，安装封装库即可，无需单独安装 `pino`。
 
 ### 对等依赖
 
 ```bash
-npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/bean-validator@>=1.0.0 @ticatec/node-exception@>=2.0.0
+npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/logger-wrapper@^0.1.0 pino@>=8.0.0
 ```
-
-> 此外还需安装 `@ticatec/logger-wrapper` —— 所有 `@ticatec/*` 包都通过这个单例完成日志输出。
 
 ## 快速开始
 

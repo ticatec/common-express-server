@@ -21,6 +21,9 @@ export { HealthRoutes } from './health/HealthRoutes.js';
 export { createSystemHealthIndicator } from './health/BuiltinHealthIndicators.js';
 export type { HealthStatus, HealthCheckResult, HealthCheckIndicator, RegisteredCheck, ReadinessResponse } from './health/HealthCheckRegistry.js';
 
+export { initialize as initializeLogger, getLogger } from '@ticatec/logger-wrapper';
+export type { LoggingConfig, LoggerEntry, AppenderConfig, AppenderOptions, AppenderType } from '@ticatec/logger-wrapper';
+
 export type { RestfulFunction, ControlFunction } from './RouterHelper.js';
 export type { moduleLoader } from './BaseServer.js';
 

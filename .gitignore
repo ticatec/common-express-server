@@ -6,3 +6,6 @@ lib/
 coverage/
 pnpm-debug.log*
 check.dat
+/*.tgz
+/package/
+/logs/

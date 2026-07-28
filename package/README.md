@@ -26,18 +26,14 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 ## Installation
 
 ```bash
-npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper
+npm install @ticatec/common-express-server @ticatec/node-common-library @ticatec/logger-wrapper pino
 ```
-
-> `@ticatec/logger-wrapper` bundles `pino` as a regular dependency, so installing the wrapper is enough — no separate `pino` install needed.
 
 ### Peer Dependencies
 
 ```bash
-npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/bean-validator@>=1.0.0 @ticatec/node-exception@>=2.0.0
+npm install express@^5.0.0 @ticatec/node-common-library@^3.1.0 @ticatec/logger-wrapper@^0.1.0 pino@>=8.0.0
 ```
-
-> Also install `@ticatec/logger-wrapper` — every `@ticatec/*` package resolves logging through this singleton.
 
 ## Quick Start
 

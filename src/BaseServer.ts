@@ -3,9 +3,9 @@ import {handleError} from "@ticatec/node-exception";
 import fs from 'fs';
 import http from "http";
 import net from "net";
-import {getLogger, Logger} from "@ticatec/logger-wrapper";
+import { getLogger, Logger } from "@ticatec/logger-wrapper";
 import CommonRoutes from "./CommonRoutes.js";
-import { HealthCheckRegistry, HealthCheckIndicator } from "./health/HealthCheckRegistry.js";
+import { HealthCheckRegistry } from "./health/HealthCheckRegistry.js";
 import { createSystemHealthIndicator } from "./health/BuiltinHealthIndicators.js";
 import { HealthRoutes } from "./health/HealthRoutes.js";
 
@@ -33,22 +33,12 @@ export default abstract class BaseServer {
     /**
      * Constructor for base server
      */
-    constructor() {
+    protected constructor() {
         this.healthRegistry = new HealthCheckRegistry();
         // Register default system health indicator
         this.healthRegistry.register('system', createSystemHealthIndicator());
     }
 
-    /**
-     * Registers a custom health check indicator probe
-     * @param name Unique check name (e.g. 'database', 'redis')
-     * @param indicator Check indicator returning HealthCheckResult
-     * @param isCritical Whether failure of this check marks overall status as DOWN (default: true)
-     * @param timeoutMs Timeout in milliseconds for this check (default: 3000ms)
-     */
-    registerHealthCheck(name: string, indicator: HealthCheckIndicator, isCritical: boolean = true, timeoutMs: number = 3000): void {
-        this.healthRegistry.register(name, indicator, isCritical, timeoutMs);
-    }
 
     /**
      * Loads configuration file

@@ -12,11 +12,11 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       '@ticatec/logger-wrapper':
-        specifier: ^0.1.0
-        version: 0.1.0(pino@9.14.0)
+        specifier: ^0.3.0
+        version: 0.3.0
       '@ticatec/node-common-library':
         specifier: ^3.1.0
-        version: 3.1.0(@ticatec/logger-wrapper@0.1.0(pino@9.14.0))
+        version: 3.1.0(@ticatec/logger-wrapper@0.3.0)
       '@ticatec/node-exception':
         specifier: ^2.0.0
         version: 2.0.0
@@ -373,14 +373,9 @@ packages:
     resolution: {integrity: sha512-zElEcCaqTCfDuum6ihl5O0hvMZ69vAPuf0wWcUDjiaJU+eOj9eM1mZN9wYfREPeRY6hwcAzoIUKJ/2TJVLDKhg==}
     engines: {node: '>=14.0.0'}
 
-  '@ticatec/logger-wrapper@0.1.0':
-    resolution: {integrity: sha512-yCUJM+jJSgAIVHVkLplQUMr5UqeRxGNiiubPFCZm8+bK62XdyRSFqLQNoe6AAptZAFYWxPPomm1EZRRig+fs4A==}
+  '@ticatec/logger-wrapper@0.3.0':
+    resolution: {integrity: sha512-762c+OH11UDHJQ6s+XjJQZ+3QwrL5DXeVDRzatcjSfMAbj80mP0n+lkHxT7CVfj7w45j+3rlTg1LoHSeiGgUCg==}
     engines: {node: '>=16.0.0'}
-    peerDependencies:
-      pino: ^8.0.0 || ^9.0.0 || ^10.0.0
-    peerDependenciesMeta:
-      pino:
-        optional: true
 
   '@ticatec/node-common-library@3.1.0':
     resolution: {integrity: sha512-CdANp8xCDX0oY6gcQ+C4srAQSMm8k3RJtLgyAwXWun2cK124bmtzchb+ZZMoS2nJ1JIUGAqZheKBQIJ6k9mSlw==}
@@ -2328,13 +2323,13 @@ snapshots:
 
   '@ticatec/bean-validator@1.0.0': {}
 
-  '@ticatec/logger-wrapper@0.1.0(pino@9.14.0)':
-    optionalDependencies:
+  '@ticatec/logger-wrapper@0.3.0':
+    dependencies:
       pino: 9.14.0
 
-  '@ticatec/node-common-library@3.1.0(@ticatec/logger-wrapper@0.1.0(pino@9.14.0))':
+  '@ticatec/node-common-library@3.1.0(@ticatec/logger-wrapper@0.3.0)':
     dependencies:
-      '@ticatec/logger-wrapper': 0.1.0(pino@9.14.0)
+      '@ticatec/logger-wrapper': 0.3.0
       reflect-metadata: 0.2.2
       uuid: 13.0.2
 
