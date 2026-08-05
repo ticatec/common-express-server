@@ -1,5 +1,4 @@
 import CommonController from "./CommonController.js";
-import {ValidationRules} from "@ticatec/bean-validator";
 import {Request} from "express";
 import { RegisteredUser } from "../LoggedUser.js";
 
@@ -12,11 +11,10 @@ export default abstract class TenantBaseController<T> extends CommonController<T
     /**
      * Constructor for tenant base controller
      * @param service The service instance to inject
-     * @param rules Entity validation rules
      * @protected
      */
-    protected constructor(service: T, rules: ValidationRules) {
-        super(service, rules);
+    protected constructor(service: T) {
+        super(service);
     }
 
     /**

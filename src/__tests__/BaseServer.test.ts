@@ -19,6 +19,7 @@ import BaseServer from '../BaseServer.js';
 import { HealthCheckRegistry } from '../health/HealthCheckRegistry.js';
 import { createSystemHealthIndicator } from '../health/BuiltinHealthIndicators.js';
 import { HealthRoutes } from '../health/HealthRoutes.js';
+import { StringValidator, NumberValidator } from '@ticatec/bean-validator';
 
 class MockProcessor extends CommonProcessor<string> {
     public processedItems: string[] = [];
@@ -54,31 +55,31 @@ class MockService {
 
 class TestAdminController extends AdminBaseController<MockService> {
     constructor(service: MockService) {
-        super(service, null);
+        super(service);
     }
 }
 
 class TestAdminSearchController extends AdminSearchController<MockService> {
     constructor(service: MockService) {
-        super(service, null);
+        super(service);
     }
 }
 
 class TestEmptyAdminSearchController extends AdminSearchController<any> {
     constructor() {
-        super({}, null);
+        super({});
     }
 }
 
 class TestTenantController extends TenantBaseController<MockService> {
     constructor(service: MockService) {
-        super(service, null);
+        super(service);
     }
 }
 
 class TestTenantSearchController extends TenantSearchController<MockService> {
     constructor(service: MockService) {
-        super(service, null);
+        super(service);
     }
 }
 
@@ -211,6 +212,39 @@ describe('common-express-server comprehensive test suite', () => {
         expect(() => emptyAdminSearch.search()(mockReq)).toThrow();
     });
 
+    test('should validate create and update with template method rules independently', async () => {
+        const service = new MockService();
+        class CustomValidationController extends AdminBaseController<MockService> {
+            constructor(svc: MockService) {
+                super(svc);
+            }
+            protected override getCreateRules(): any {
+                return [new StringValidator('name', { required: true })];
+            }
+            protected override getUpdateRules(): any {
+                return [new NumberValidator('id', { required: true })];
+            }
+        }
+
+        const ctrl = new CustomValidationController(service);
+
+        // Valid create request
+        const createReqValid: any = { method: 'POST', originalUrl: '/test', body: { name: 'ValidName' } };
+        await expect(ctrl.createNew()(createReqValid)).resolves.toBeDefined();
+
+        // Invalid create request (missing name)
+        const createReqInvalid: any = { method: 'POST', originalUrl: '/test', body: {} };
+        await expect(ctrl.createNew()(createReqInvalid)).rejects.toThrow();
+
+        // Valid update request
+        const updateReqValid: any = { method: 'PUT', originalUrl: '/test', body: { id: 123 } };
+        await expect(ctrl.update()(updateReqValid)).resolves.toBeDefined();
+
+        // Invalid update request (missing id)
+        const updateReqInvalid: any = { method: 'PUT', originalUrl: '/test', body: { name: 'NoId' } };
+        await expect(ctrl.update()(updateReqInvalid)).rejects.toThrow();
+    });
+
     test('should verify public vs authenticated route authorization rules', async () => {
         const publicRoutes = new PublicRoutes();
         const protectedRoutes = new ProtectedRoutes();
@@ -282,7 +316,7 @@ describe('common-express-server comprehensive test suite', () => {
     test('should resolve RegisteredUser type from Controller.getLoggedUser without generic boilerplate', () => {
         class RegistryTenantController extends TenantBaseController<MockService> {
             constructor(service: MockService) {
-                super(service, null);
+                super(service);
             }
             public getUser(req: any) {
                 return this.getLoggedUser(req);

@@ -13,33 +13,75 @@ import Controller from "./Controller.js";
 export default abstract class CommonController<T> extends BaseController<T> {
 
     /**
-     * Entity validation rules
-     * @protected
-     */
-    protected readonly rules: ValidationRules;
-
-    /**
      * Constructor for common controller
      * @param service The service instance to inject
-     * @param rules Validation rules for entities (optional)
      * @protected
      */
-    protected constructor(service: T, rules: ValidationRules = null) {
+    protected constructor(service: T) {
         super(service);
-        this.rules = rules;
     }
 
     /**
-     * Validates entity data
+     * Default validation rules for entity operations (can be overridden by subclass)
+     * @param _req Express request object
+     * @protected
+     */
+    protected getRules(_req: Request): ValidationRules {
+        return null;
+    }
+
+    /**
+     * Validation rules for create operation (defaults to getRules)
+     * @param req Express request object
+     * @protected
+     */
+    protected getCreateRules(req: Request): ValidationRules {
+        return this.getRules(req);
+    }
+
+    /**
+     * Validation rules for update operation (defaults to getRules)
+     * @param req Express request object
+     * @protected
+     */
+    protected getUpdateRules(req: Request): ValidationRules {
+        return this.getRules(req);
+    }
+
+    /**
+     * Validates data when creating a new entity
+     * @param req Express request object
      * @param data The data to validate
      * @protected
      */
-    protected validateEntity(data: any) {
-        if (!this.rules || !Array.isArray(this.rules) || this.rules.length === 0) {
+    protected validateCreateEntity(req: Request, data: any) {
+        const rules = this.getCreateRules(req);
+        this.doValidate(data, rules);
+    }
+
+    /**
+     * Validates data when updating an entity
+     * @param req Express request object
+     * @param data The data to validate
+     * @protected
+     */
+    protected validateUpdateEntity(req: Request, data: any) {
+        const rules = this.getUpdateRules(req);
+        this.doValidate(data, rules);
+    }
+
+    /**
+     * Executes entity data validation against specified rules
+     * @param data The data to validate
+     * @param rules Validation rules
+     * @protected
+     */
+    protected doValidate(data: any, rules: ValidationRules) {
+        if (!rules || !Array.isArray(rules) || rules.length === 0) {
             return;
         }
         const validator: any = (beanValidator as any).validate ? beanValidator : (beanValidator as any).default;
-        const result = validator.validate(data, this.rules);
+        const result = validator.validate(data, rules);
         if (!result.valid) {
             Controller.debugEnabled && this.logger.debug({ error: result.errorMessage }, 'Invalid entity data');
             throw new IllegalParameterError(result.errorMessage);
@@ -117,7 +159,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
         const data:any = this.buildNewEntry(req);
         Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to create an entity`);
         this.checkInterface('createNew');
-        this.validateEntity(data);
+        this.validateCreateEntity(req, data);
         return this.invokeServiceInterface('createNew', this.getCreateNewArguments(req));
     }
 
@@ -131,7 +173,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
         const data:any = this.buildUpdatedEntry(req);
         Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to update an entity`);
         this.checkInterface('update');
-        this.validateEntity(data);
+        this.validateUpdateEntity(req, data);
         return this.invokeServiceInterface('update', this.getUpdateArguments(req));
     }
 
