@@ -10,7 +10,7 @@ When developing applications or writing code with AI assistance, strictly adhere
 
 1. **Web Layer (`routes` + `controller`)**:
    - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): Handles HTTP route binding, header validation, middleware registration, and authentication (`isValidUser`).
-   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
+   - **Controller** (`Controller`, `BaseController`, `CommonController`, `CommonSearchController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
 2. **Service Layer (`service`)**:
    - Handles core business rules, domain validation, state transitions, and transaction management.
    - Interacts with the **Repository Layer** for domain entity retrieval and persistence.
@@ -211,7 +211,7 @@ Architecture requirements:
      - PUT /profile - Update user profile
      - POST /change-password - Change password
    - ProductRoutes: extends CommonRoutes, implements tenant verification
-     - Use TenantBaseController and TenantSearchController
+      - Use CommonController and CommonSearchController
      - Provide product CRUD routes
    - AdminRoutes: extends CommonRoutes, implements admin verification
      - Provide user management routes

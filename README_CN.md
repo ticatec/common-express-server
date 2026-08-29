@@ -23,6 +23,8 @@
 
 - **[Controller 使用指南](./CONTROLLER_CN.md)** - 控制器使用完整指南，包括 CRUD 和搜索操作
 
+> 🚀 **重大升级说明**：控制器体系已进行全面精简与现代化升级。已废弃并移除原有的 4 个特定子类（`AdminBaseController`、`TenantBaseController`、`AdminSearchController`、`TenantSearchController`），全面统一至 `CommonController` 与 `CommonSearchController`。校验规则现通过直接覆写 `getRules(): ValidationRules` 方法进行声明，无需在构造器中传递。
+
 ## 安装
 
 ```bash
@@ -211,7 +213,7 @@ declare module '@ticatec/common-express-server' {
 }
 ```
 
-绑定后，框架内所有 Controller 的 `this.getLoggedUser(req)`、`TenantBaseController` 参数及 `CommonRoutes` 的用户钩子将**自动推导为 `AppUser` 强类型**，无需在每个 Controller 上编写冗余泛型！
+绑定后，框架内所有 Controller 的 `this.getLoggedUser(req)`、`CommonController` 参数及 `CommonRoutes` 的用户钩子将**自动推导为 `AppUser` 强类型**，无需在每个 Controller 上编写冗余泛型！
 
 #### 自定义用户验证
 
@@ -227,7 +229,7 @@ class VerifiedUserRoutes extends CommonRoutes {
         if (!user) {
             return false;
         }
-        // 检查用户账户是否激活
+        // 检查用户账户是否有效
         const account = await database.getAccount(user.accountCode);
         return account && account.status === 'active';
     }
@@ -279,7 +281,7 @@ class ApiRoutes extends CommonRoutes {
             // 检查 API 版本
             const version = req.headers['api-version'];
             if (!version) {
-                throw new Error('需要 API 版本');
+                throw new Error('API version is required');
             }
             next();
         };
@@ -302,7 +304,7 @@ import { CommonRoutes, routerHelper } from '@ticatec/common-express-server';
 
 class PublicRoutes extends CommonRoutes {
 
-    // 覆盖 isValidUser 以允许公开访问（无需认证）
+    // 覆写 isValidUser 以允许公开访问（无需认证）
     protected isValidUser(user: any): boolean {
         return true; // 允许无需认证访问
     }
@@ -320,7 +322,7 @@ class PublicRoutes extends CommonRoutes {
 ### 3. 创建控制器
 
 ```typescript
-import { TenantBaseController } from '@ticatec/common-express-server';
+import { CommonController } from '@ticatec/common-express-server';
 import { ValidationRules, StringValidator } from '@ticatec/bean-validator';
 
 interface UserService {
@@ -340,13 +342,18 @@ const userValidationRules: ValidationRules = [
     })
 ];
 
-class UserController extends TenantBaseController<UserService> {
+class UserController extends CommonController<UserService> {
     constructor(userService: UserService) {
-        super(userService, userValidationRules);
+        super(userService);
     }
 
-    // CRUD 方法已继承并自动验证
-    // createNew(), update(), del() 方法可用
+    // 配置校验规则
+    protected getRules(): ValidationRules {
+        return userValidationRules;
+    }
+
+    // CRUD 方法（createNew, update, del）已继承并自动验证，
+    // 默认自动将 [loggedUser, req.body] 透传至服务层方法。
 
     // 添加自定义方法
     search() {
@@ -435,12 +442,9 @@ routerHelper.invokeController()    // 包装控制器处理器
 
 ### 控制器层次结构
 
-- **BaseController<T>**: 具有日志记录和用户上下文的基础控制器
-- **CommonController<T>**: 具有验证的 CRUD 操作
-- **AdminBaseController<T>**: 管理员特定操作（与租户无关）
-- **TenantBaseController<T>**: 租户特定操作
-- **AdminSearchController<T>**: 管理员搜索操作
-- **TenantSearchController<T>**: 租户搜索操作
+- **BaseController<T>**: 基础控制器，提供日志记录和登录用户上下文访问
+- **CommonController<T>**: 统一 CRUD 控制器，提供自动校验并默认自动透传用户参数 `[loggedUser, req.body]`
+- **CommonSearchController<T>**: 搜索控制器，提供开箱即用的搜索查询处理
 
 📚 **[完整控制器使用指南 →](./CONTROLLER_CN.md)**
 
@@ -557,18 +561,25 @@ API 网关应该：
 
 ## 多租户支持
 
-库提供内置的多租户支持：
+库通过 `CommonController` 提供内置的多租户支持：
 
 ```typescript
-// 租户特定控制器
-class ProductController extends TenantBaseController<ProductService> {
+// 标准 / 租户控制器（默认透传登录用户参数）
+class ProductController extends CommonController<ProductService> {
     // 自动接收登录用户上下文
-    // 所有操作都是租户范围的
+    // 所有 CRUD 操作默认将 [loggedUser, req.body] 传递给服务层方法
 }
 
-// 管理员控制器（跨租户）
-class SystemController extends AdminBaseController<SystemService> {
-    // 跨所有租户的操作
+// 平台管理员控制器（跨租户 / 平台级操作）
+class SystemController extends CommonController<SystemService> {
+    // 根据需要覆写入参构建方法，例如省略 user 参数
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [req.body];
+    }
 }
 ```
 
@@ -593,7 +604,11 @@ const rules: ValidationRules = [
 
 class UserController extends CommonController<UserService> {
     constructor(service: UserService) {
-        super(service, rules); // 自动应用验证
+        super(service);
+    }
+
+    protected getRules(): ValidationRules {
+        return rules; // 在 createNew() 和 update() 时自动应用验证
     }
 }
 ```

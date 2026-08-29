@@ -1,4 +1,3 @@
-
 import {ActionNotFoundError, IllegalParameterError} from "@ticatec/node-exception";
 import BaseController from "./BaseController.js";
 import beanValidator, {ValidationRules} from "@ticatec/bean-validator";
@@ -21,31 +20,29 @@ export default abstract class CommonController<T> extends BaseController<T> {
         super(service);
     }
 
+
     /**
      * Default validation rules for entity operations (can be overridden by subclass)
-     * @param _req Express request object
      * @protected
      */
-    protected getRules(_req: Request): ValidationRules {
+    protected getRules(): ValidationRules {
         return null;
     }
 
     /**
      * Validation rules for create operation (defaults to getRules)
-     * @param req Express request object
      * @protected
      */
-    protected getCreateRules(req: Request): ValidationRules {
-        return this.getRules(req);
+    protected getCreateRules(): ValidationRules {
+        return this.getRules();
     }
 
     /**
      * Validation rules for update operation (defaults to getRules)
-     * @param req Express request object
      * @protected
      */
-    protected getUpdateRules(req: Request): ValidationRules {
-        return this.getRules(req);
+    protected getUpdateRules(): ValidationRules {
+        return this.getRules();
     }
 
     /**
@@ -55,7 +52,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected validateCreateEntity(req: Request, data: any) {
-        const rules = this.getCreateRules(req);
+        const rules = this.getCreateRules();
         this.doValidate(data, rules);
     }
 
@@ -66,7 +63,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected validateUpdateEntity(req: Request, data: any) {
-        const rules = this.getUpdateRules(req);
+        const rules = this.getUpdateRules();
         this.doValidate(data, rules);
     }
 
@@ -83,7 +80,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
         const validator: any = (beanValidator as any).validate ? beanValidator : (beanValidator as any).default;
         const result = validator.validate(data, rules);
         if (!result.valid) {
-            Controller.debugEnabled && this.logger.debug({ error: result.errorMessage }, 'Invalid entity data');
+            Controller.debugEnabled && this.logger.debug({error: result.errorMessage}, 'Invalid entity data');
             throw new IllegalParameterError(result.errorMessage);
         }
     }
@@ -123,7 +120,7 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @param name The method name to check
      * @protected
      */
-    protected checkInterface(name: string):void {
+    protected checkInterface(name: string): void {
         if (this.service[name] == null) {
             this.logger.warn(`Current service does not have interface: ${name}`);
             throw new ActionNotFoundError();
@@ -156,8 +153,8 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _createNew(req: Request): Promise<any> {
-        const data:any = this.buildNewEntry(req);
-        Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to create an entity`);
+        const data: any = this.buildNewEntry(req);
+        Controller.debugEnabled && this.logger.debug({data}, `${req.method} ${req.originalUrl} Request to create an entity`);
         this.checkInterface('createNew');
         this.validateCreateEntity(req, data);
         return this.invokeServiceInterface('createNew', this.getCreateNewArguments(req));
@@ -170,8 +167,8 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @protected
      */
     protected _update(req: Request): Promise<any> {
-        const data:any = this.buildUpdatedEntry(req);
-        Controller.debugEnabled && this.logger.debug({ data }, `${req.method} ${req.originalUrl} Request to update an entity`);
+        const data: any = this.buildUpdatedEntry(req);
+        Controller.debugEnabled && this.logger.debug({data}, `${req.method} ${req.originalUrl} Request to update an entity`);
         this.checkInterface('update');
         this.validateUpdateEntity(req, data);
         return this.invokeServiceInterface('update', this.getUpdateArguments(req));
@@ -194,16 +191,18 @@ export default abstract class CommonController<T> extends BaseController<T> {
      * @param req Express request object
      * @returns Array of arguments to pass to service create method
      * @protected
-     * @abstract
      */
-    protected abstract getCreateNewArguments(req: Request):Array<any>;
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [this.getLoggedUser(req), req.body];
+    }
 
     /**
      * Gets arguments for updating entity
      * @param req Express request object
      * @returns Array of arguments to pass to service update method
      * @protected
-     * @abstract
      */
-    protected abstract getUpdateArguments(req: Request):Array<any>;
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [this.getLoggedUser(req), req.body];
+    }
 }

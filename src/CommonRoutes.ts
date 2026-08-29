@@ -143,7 +143,6 @@ export default class CommonRoutes {
      * - Tenant-specific validation
      * - Custom business rules for user access
      *
-     * @param user The user object to validate (will be user.actAs if impersonation is active)
      * @returns true if the user passes validation, false otherwise
      * @protected
      *
@@ -178,6 +177,7 @@ export default class CommonRoutes {
      *   return tenant && tenant.isActive;
      * }
      * ```
+     * @param _user
      */
     protected userCheck(_user: RegisteredUser): boolean | Promise<boolean> {
         return true;

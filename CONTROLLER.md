@@ -2,18 +2,18 @@
 
 [中文](./CONTROLLER_CN.md) | English
 
-This guide explains how to use the various controller classes provided by `@ticatec/common-express-server` to build your API endpoints.
+This guide explains how to use the controller classes provided by `@ticatec/common-express-server` to build your API endpoints.
 
 ## Table of Contents
 
 - [Controller Hierarchy](#controller-hierarchy)
 - [BaseController](#basecontroller)
 - [CommonController](#commoncontroller)
-- [AdminBaseController](#adminbasecontroller)
-- [TenantBaseController](#tenantbasecontroller)
-- [AdminSearchController](#adminsearchcontroller)
-- [TenantSearchController](#tenantsearchcontroller)
+- [CommonSearchController](#commonsearchcontroller)
 - [Complete Examples](#complete-examples)
+- [Best Practices](#best-practices)
+- [Debug Mode](#debug-mode)
+- [Summary](#summary)
 
 ## Controller Hierarchy
 
@@ -22,12 +22,14 @@ BaseController<T>
     ↓
 CommonController<T>
     ↓
-    ├─→ AdminBaseController<T>  (For platform admin, tenant-independent)
-    └─→ TenantBaseController<T> (For tenant-specific operations)
-        ↓
-        ├─→ AdminSearchController<T> (Admin search operations)
-        └─→ TenantSearchController<T> (Tenant search operations)
+CommonSearchController<T>
 ```
+
+- **`BaseController<T>`**: The foundation class providing logger injection, request user context parsing (`getLoggedUser`), and user impersonation support.
+- **`CommonController<T>`**: Extends `BaseController` with CRUD operations (`createNew`, `update`, `del`), automatic validation integration, and configurable service method argument mapping (defaults to passing `[loggedUser, req.body]`).
+- **`CommonSearchController<T>`**: Extends `CommonController` with a built-in `search()` method that passes `[loggedUser, req.query]` to `service.search`.
+
+---
 
 ## BaseController
 
@@ -35,14 +37,15 @@ The foundation of all controllers. Provides basic functionality including loggin
 
 ### Features
 
-- **Logging**: Automatic logger instance with `log4js`
-- **User Context**: Access to the currently logged user
+- **Logging**: Automatic logger instance with Pino (via `@ticatec/logger-wrapper`)
+- **User Context**: Access to the currently logged user via `this.getLoggedUser(req)`
 - **User Impersonation**: Automatic support for `actAs` user impersonation
 
 ### Basic Usage
 
 ```typescript
 import BaseController from '@ticatec/common-express-server/common/BaseController';
+import { Request } from 'express';
 
 interface UserService {
     someMethod(user: any): Promise<any>;
@@ -97,77 +100,128 @@ declare module '@ticatec/common-express-server' {
 }
 ```
 
-Once registered, `this.getLoggedUser(req)` and user parameters passed to service methods in all controllers (`BaseController`, `CommonController`, `TenantBaseController`, etc.) will **automatically infer as `AppUser`** without needing generics on every controller!
+Once registered, `this.getLoggedUser(req)` and user parameters passed to service methods in all controllers (`BaseController`, `CommonController`, `CommonSearchController`, etc.) will **automatically infer as `AppUser`** without needing generics on every controller!
+
+---
 
 ## CommonController
 
-Extends `BaseController` with CRUD operations and validation support.
+Extends `BaseController` with CRUD operations, customizable service invocation arguments, and automatic validation support.
 
 ### Features
 
-- **Automatic Validation**: Built-in validation using `@ticatec/bean-validator`
-- **CRUD Operations**: `createNew()`, `update()`, `del()` methods
+- **Automatic Validation**: Built-in validation using `@ticatec/bean-validator` via `getRules()`, `getCreateRules()`, or `getUpdateRules()`
+- **CRUD Operations**: `createNew()`, `update()`, `del()` methods returning standard Express restful handlers
+- **Default Service Arguments**: Defaults to forwarding `[loggedUser, req.body]` to service methods
+- **Customizable Arguments**: Easily override argument builders for tenant-agnostic/admin operations
 - **Service Interface Check**: Validates service methods before invocation
-- **Request Data Building**: Customizable data extraction from requests
+- **Request Data Building**: Customizable data extraction from requests via `buildNewEntry()` and `buildUpdatedEntry()`
 
-### Usage
+### Usage (Tenant / Standard Model)
+
+By default, `CommonController` passes the logged user as the first parameter to `createNew` and `update` service interfaces:
 
 ```typescript
 import CommonController from '@ticatec/common-express-server/common/CommonController';
-import { ValidationRules, StringValidator } from '@ticatec/bean-validator';
+import { ValidationRules, StringValidator, NumberValidator } from '@ticatec/bean-validator';
+import { Request } from 'express';
 
-interface UserService {
-    createNew(data: any): Promise<any>;
-    update(data: any): Promise<any>;
+interface ProductService {
+    createNew(user: any, data: any): Promise<any>;
+    update(user: any, data: any): Promise<any>;
+    del(id: string): Promise<any>;
 }
 
-const userValidationRules: ValidationRules = [
+const productRules: ValidationRules = [
     new StringValidator('name', { required: true, minLen: 2, maxLen: 50 }),
-    new StringValidator('email', {
-        required: true,
-        format: {
-            regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-            message: 'Invalid email format'
-        }
-    })
+    new NumberValidator('price', { required: true, minValue: 0 })
 ];
 
-class UserController extends CommonController<UserService> {
-    constructor(service: UserService) {
-        super(service, userValidationRules);
+class ProductController extends CommonController<ProductService> {
+    constructor(service: ProductService) {
+        super(service);
     }
 
-    // Implement abstract methods
-    protected getCreateNewArguments(req: Request): Array<any> {
-        return [req.body];  // Pass request body to service
-    }
-
-    protected getUpdateArguments(req: Request): Array<any> {
-        return [req.body];  // Pass request body to service
+    // Configure validation rules
+    protected getRules(): ValidationRules {
+        return productRules;
     }
 }
 
 // In your routes
-const userController = new UserController(userService);
+const productController = new ProductController(productService);
 
-// POST /users - Create new user
-router.post('/users', userController.createNew());
+// POST /products - Create product (calls service.createNew(user, body))
+router.post('/products', productController.createNew());
 
-// PUT /users - Update user
-router.put('/users/:id', userController.update());
+// PUT /products/:id - Update product (calls service.update(user, body))
+router.put('/products/:id', productController.update());
 
-// DELETE /users/:id - Delete user
-router.delete('/users/:id', userController.del());
+// DELETE /products/:id - Delete product (calls service.del(id))
+router.delete('/products/:id', productController.del());
+```
+
+### Usage (Platform Admin / Tenant-Agnostic Model)
+
+For platform-level or admin operations where the service method does not require a `user` parameter (e.g. `createNew(data)`):
+
+```typescript
+interface SystemConfigService {
+    createNew(config: any): Promise<any>;
+    update(config: any): Promise<any>;
+    del(id: string): Promise<any>;
+}
+
+class SystemConfigController extends CommonController<SystemConfigService> {
+    constructor(service: SystemConfigService) {
+        super(service);
+    }
+
+    protected getRules(): ValidationRules {
+        return configRules;
+    }
+
+    // Override argument builders to omit the user parameter
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+}
+```
+
+### Customizing Validation Rules
+
+You can provide distinct validation rules for create vs update operations:
+
+```typescript
+class UserController extends CommonController<UserService> {
+    // Shared fallback rules
+    protected getRules(): ValidationRules {
+        return baseRules;
+    }
+
+    // Rules specifically for createNew
+    protected getCreateRules(): ValidationRules {
+        return createRules;
+    }
+
+    // Rules specifically for update
+    protected getUpdateRules(): ValidationRules {
+        return updateRules;
+    }
+}
 ```
 
 ### Customizing Data Building
 
-Override `buildNewEntry()` and `buildUpdatedEntry()` to customize data extraction:
+Override `buildNewEntry()` and `buildUpdatedEntry()` to enrich data before validation and service invocation:
 
 ```typescript
-class UserController extends CommonController<UserService> {
+class ProductController extends CommonController<ProductService> {
     protected buildNewEntry(req: Request): any {
-        // Add createdAt timestamp
         return {
             ...req.body,
             createdAt: new Date().toISOString()
@@ -175,7 +229,6 @@ class UserController extends CommonController<UserService> {
     }
 
     protected buildUpdatedEntry(req: Request): any {
-        // Add updatedAt timestamp
         return {
             ...req.body,
             updatedAt: new Date().toISOString()
@@ -186,114 +239,129 @@ class UserController extends CommonController<UserService> {
 
 ### Protected Methods
 
-#### `validateEntity(data: any)`
+#### `getRules(): ValidationRules`
+Returns default validation rules for entity operations (defaults to `null`).
 
-Validates entity data against the configured rules. Throws `IllegalParameterError` if validation fails.
+#### `getCreateRules(): ValidationRules`
+Returns validation rules for creation (defaults to `getRules()`).
 
-#### `checkInterface(name: string)`
+#### `getUpdateRules(): ValidationRules`
+Returns validation rules for update (defaults to `getRules()`).
 
-Checks if the service has a specific method. Throws `ActionNotFoundError` if not found.
+#### `getCreateNewArguments(req: Request): Array<any>`
+Returns arguments passed to `service.createNew`. Defaults to `[this.getLoggedUser(req), req.body]`.
 
-#### `invokeServiceInterface(name: string, args: Array<any>)`
+#### `getUpdateArguments(req: Request): Array<any>`
+Returns arguments passed to `service.update`. Defaults to `[this.getLoggedUser(req), req.body]`.
 
-Invokes a service method by name with the provided arguments.
+#### `checkInterface(name: string): void`
+Checks if the injected service has a method named `name`. Throws `ActionNotFoundError` if not found.
 
-## AdminBaseController
+#### `invokeServiceInterface(name: string, args: Array<any>): Promise<any>`
+Invokes a service method by name with the given arguments array.
 
-For platform admin operations that are **tenant-independent**. Used by system administrators to manage resources across all tenants.
+---
 
-### Characteristics
+## CommonSearchController
 
-- ✅ No user parameter in service calls
-- ✅ No tenant filtering
-- ✅ Direct data manipulation
-- ✅ Requires validation rules
+Extends `CommonController` with search capabilities out of the box.
+
+### Features
+
+- **Search Action**: Built-in `search()` method returning an Express handler
+- **Query & User Propagation**: Passes `[this.getLoggedUser(req), req.query]` directly to `service.search(...)`
+- **Inherited CRUD**: Retains full CRUD and validation capabilities from `CommonController`
 
 ### Usage
 
 ```typescript
-import AdminBaseController from '@ticatec/common-express-server/common/AdminBaseController';
+import CommonSearchController from '@ticatec/common-express-server/common/CommonSearchController';
+import { Request } from 'express';
 
-interface SystemConfigService {
-    createNew(config: any): Promise<any>;
-    update(config: any): Promise<any>;
+interface OrderService {
+    createNew(user: any, data: any): Promise<any>;
+    update(user: any, data: any): Promise<any>;
+    del(id: string): Promise<any>;
+    search(user: any, query: any): Promise<any>;
 }
 
-class SystemConfigController extends AdminBaseController<SystemConfigService> {
-    constructor(service: SystemConfigService) {
-        super(service, validationRules);
+class OrderController extends CommonSearchController<OrderService> {
+    constructor(service: OrderService) {
+        super(service);
+    }
+
+    protected getRules() {
+        return orderValidationRules;
     }
 }
 
-// Service method signature: createNew(config: any)
-// Arguments passed: [req.body]
+// In your routes
+const orderController = new OrderController(orderService);
+
+// GET /orders?status=active&page=1 - Calls orderService.search(user, req.query)
+router.get('/orders', orderController.search());
+
+// POST /orders - Calls orderService.createNew(user, req.body)
+router.post('/orders', orderController.createNew());
 ```
 
-### When to Use
+---
 
-- System-wide configuration management
-- Platform-level features
-- Cross-tenant reporting
-- Administrative tools
+## Complete Examples
 
-## TenantBaseController
-
-For **tenant-specific** operations. All operations are scoped to the current user's tenant.
-
-### Characteristics
-
-- ✅ First parameter is always the logged user
-- ✅ Automatic tenant scoping
-- ✅ Supports user impersonation
-- ✅ Requires validation rules
-
-### Usage
+### Example 1: Multi-Tenant Business Module
 
 ```typescript
-import TenantBaseController from '@ticatec/common-express-server/common/TenantBaseController';
-
+// Services
 interface ProductService {
     createNew(user: any, data: any): Promise<any>;
     update(user: any, data: any): Promise<any>;
+    del(id: string): Promise<any>;
+    search(user: any, query: any): Promise<any>;
 }
 
-class ProductController extends TenantBaseController<ProductService> {
+// Controllers
+import CommonSearchController from '@ticatec/common-express-server/common/CommonSearchController';
+import { ValidationRules, StringValidator, NumberValidator } from '@ticatec/bean-validator';
+
+const productRules: ValidationRules = [
+    new StringValidator('name', { required: true, minLen: 2, maxLen: 100 }),
+    new NumberValidator('price', { required: true, minValue: 0 })
+];
+
+class ProductController extends CommonSearchController<ProductService> {
     constructor(service: ProductService) {
-        super(service, validationRules);
+        super(service);
+    }
+
+    protected getRules(): ValidationRules {
+        return productRules;
     }
 }
 
-// Service method signature: createNew(user: any, data: any)
-// Arguments passed: [loggedUser, req.body]
-```
+// Routes
+import { CommonRoutes } from '@ticatec/common-express-server';
 
-### When to Use
-
-- Tenant data management
-- User-specific resources
-- Multi-tenant applications
-- Business operations
-
-### Example with Routes
-
-```typescript
-import { CommonRouter } from '@ticatec/common-express-server';
-
-class ProductRoutes extends CommonRouter {
+class ProductRoutes extends CommonRoutes {
     private productController = new ProductController(productService);
 
     protected bindRoutes() {
-        // Create product - tenant-scoped
+        // Search products
+        this.get('/products', this.helper.invokeRestfulAction(
+            this.productController.search()
+        ));
+
+        // Create product
         this.post('/products', this.helper.invokeRestfulAction(
             this.productController.createNew()
         ));
 
-        // Update product - tenant-scoped
+        // Update product
         this.put('/products/:id', this.helper.invokeRestfulAction(
             this.productController.update()
         ));
 
-        // Delete product - tenant-scoped
+        // Delete product
         this.delete('/products/:id', this.helper.invokeRestfulAction(
             this.productController.del()
         ));
@@ -301,313 +369,137 @@ class ProductRoutes extends CommonRouter {
 }
 ```
 
-## AdminSearchController
-
-For admin-level search and pagination operations (tenant-independent).
-
-### Characteristics
-
-- ✅ Designed for search/list operations
-- ✅ No user parameter
-- ✅ Cross-tenant data access
-- ✅ Supports pagination
-
-### Usage
-
-```typescript
-import AdminSearchController from '@ticatec/common-express-server/common/AdminSearchController';
-
-interface UserAdminService {
-    search(query: any, pagination: any): Promise<any>;
-}
-
-class UserAdminSearchController extends AdminSearchController<UserAdminService> {
-    constructor(service: UserAdminService) {
-        super(service);
-    }
-
-    buildQuery() {
-        return async (req: Request) => {
-            this.checkInterface('search');
-
-            const query = this.buildSearchQuery(req);
-            const pagination = this.buildPagination(req);
-
-            return await this.invokeServiceInterface('search', [query, pagination]);
-        };
-    }
-}
-
-// Usage in routes
-const searchController = new UserAdminSearchController(userAdminService);
-router.get('/admin/users', searchController.buildQuery());
-```
-
-### When to Use
-
-- Admin user management
-- System-wide search
-- Cross-tenant reporting
-- Audit logs
-
-## TenantSearchController
-
-For tenant-scoped search and pagination operations.
-
-### Characteristics
-
-- ✅ Designed for search/list operations
-- ✅ First parameter is logged user
-- ✅ Tenant-scoped results
-- ✅ Supports pagination
-
-### Usage
-
-```typescript
-import TenantSearchController from '@ticatec/common-express-server/common/TenantSearchController';
-
-interface OrderService {
-    search(user: any, query: any, pagination: any): Promise<any>;
-}
-
-class OrderSearchController extends TenantSearchController<OrderService> {
-    constructor(service: OrderService) {
-        super(service);
-    }
-
-    buildQuery() {
-        return async (req: Request) => {
-            this.checkInterface('search');
-
-            const user = this.getLoggedUser(req);
-            const query = this.buildSearchQuery(req);
-            const pagination = this.buildPagination(req);
-
-            return await this.invokeServiceInterface('search', [user, query, pagination]);
-        };
-    }
-}
-
-// Usage in routes
-const searchController = new OrderSearchController(orderService);
-router.get('/orders', searchController.buildQuery());
-```
-
-### When to Use
-
-- User order history
-- Tenant data search
-- Customer-specific listings
-- Personalized content
-
-## Complete Examples
-
-### Example 1: E-commerce Platform (Multi-tenant)
-
-```typescript
-// Services
-interface ProductService {
-    createNew(user: any, data: any): Promise<any>;
-    update(user: any, data: any): Promise<any>;
-    search(user: any, query: any, pagination: any): Promise<any>;
-}
-
-interface OrderService {
-    createNew(user: any, data: any): Promise<any>;
-    search(user: any, query: any, pagination: any): Promise<any>;
-}
-
-// Controllers
-import TenantBaseController from '@ticatec/common-express-server/common/TenantBaseController';
-import TenantSearchController from '@ticatec/common-express-server/common/TenantSearchController';
-
-class ProductController extends TenantBaseController<ProductService> {
-    constructor(service: ProductService) {
-        super(service, productValidationRules);
-    }
-}
-
-class ProductSearchController extends TenantSearchController<ProductService> {
-    constructor(service: ProductService) {
-        super(service);
-    }
-
-    buildQuery() {
-        return async (req: Request) => {
-            this.checkInterface('search');
-            const user = this.getLoggedUser(req);
-            const query = this.buildSearchQuery(req);
-            const pagination = this.buildPagination(req);
-            return await this.invokeServiceInterface('search', [user, query, pagination]);
-        };
-    }
-}
-
-// Routes
-import { CommonRouter } from '@ticatec/common-express-server';
-
-class ProductRoutes extends CommonRouter {
-    private productController = new ProductController(productService);
-    private searchController = new ProductSearchController(productService);
-
-    protected bindRoutes() {
-        // CRUD operations
-        this.post('/products', this.helper.invokeRestfulAction(
-            this.productController.createNew()
-        ));
-
-        this.put('/products/:id', this.helper.invokeRestfulAction(
-            this.productController.update()
-        ));
-
-        // Search
-        this.get('/products', this.helper.invokeRestfulAction(
-            this.searchController.buildQuery()
-        ));
-    }
-}
-```
-
-### Example 2: Platform Admin Panel
+### Example 2: Platform Admin Panel (Tenant-Agnostic)
 
 ```typescript
 // Service
 interface SystemUserService {
     createNew(data: any): Promise<any>;
     update(data: any): Promise<any>;
-    search(query: any, pagination: any): Promise<any>;
+    del(id: string): Promise<any>;
+    search(query: any): Promise<any>;
 }
 
 // Controllers
-import AdminBaseController from '@ticatec/common-express-server/common/AdminBaseController';
-import AdminSearchController from '@ticatec/common-express-server/common/AdminSearchController';
+import CommonController from '@ticatec/common-express-server/common/CommonController';
+import { ValidationRules, StringValidator } from '@ticatec/bean-validator';
+import { Request } from 'express';
 
-class SystemUserController extends AdminBaseController<SystemUserService> {
-    constructor(service: SystemUserService) {
-        super(service, userValidationRules);
-    }
-}
+const systemUserRules: ValidationRules = [
+    new StringValidator('username', { required: true, minLen: 3 }),
+    new StringValidator('role', { required: true })
+];
 
-class SystemUserSearchController extends AdminSearchController<SystemUserService> {
+class SystemUserController extends CommonController<SystemUserService> {
     constructor(service: SystemUserService) {
         super(service);
     }
 
-    buildQuery() {
+    protected getRules(): ValidationRules {
+        return systemUserRules;
+    }
+
+    // Pass only body to service methods without user context
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+
+    // Custom search action for admin without tenant/user scoping
+    search() {
         return async (req: Request) => {
             this.checkInterface('search');
-            const query = this.buildSearchQuery(req);
-            const pagination = this.buildPagination(req);
-            return await this.invokeServiceInterface('search', [query, pagination]);
+            return await this.invokeServiceInterface('search', [req.query]);
         };
     }
 }
 
-// Routes (no authentication required, handled by gateway/admin checks)
-class AdminUserRoutes extends CommonRouter {
-    private userController = new SystemUserController(systemUserService);
-    private searchController = new SystemUserSearchController(systemUserService);
+// Routes
+import { CommonRoutes } from '@ticatec/common-express-server';
 
-    protected getGlobalHandler(): boolean | CustomChecker {
-        // Custom admin check
-        return (req) => req['user']?.isPlatform === true;
-    }
+class AdminUserRoutes extends CommonRoutes {
+    private userController = new SystemUserController(systemUserService);
 
     protected bindRoutes() {
+        this.get('/admin/users', this.helper.invokeRestfulAction(
+            this.userController.search()
+        ));
+
         this.post('/admin/users', this.helper.invokeRestfulAction(
             this.userController.createNew()
         ));
 
-        this.get('/admin/users', this.helper.invokeRestfulAction(
-            this.searchController.buildQuery()
+        this.put('/admin/users/:id', this.helper.invokeRestfulAction(
+            this.userController.update()
+        ));
+
+        this.delete('/admin/users/:id', this.helper.invokeRestfulAction(
+            this.userController.del()
         ));
     }
 }
 ```
+
+---
 
 ## Best Practices
 
 ### 1. Choose the Right Controller
 
-| Scenario | Use Controller |
-|----------|---------------|
-| Platform admin operations | `AdminBaseController` |
-| Tenant-specific operations | `TenantBaseController` |
-| Admin search across all data | `AdminSearchController` |
-| Tenant-scoped search | `TenantSearchController` |
+| Scenario | Controller Base Class | Notes |
+|----------|-----------------------|-------|
+| Non-service or custom endpoints | `BaseController` | Simple endpoints with logging & user context |
+| Standard CRUD entity management | `CommonController` | Provides built-in validation & CRUD actions |
+| Entity management with search | `CommonSearchController` | Provides `search()` alongside full CRUD |
 
 ### 2. Validation Rules
 
-Always define validation rules for controllers that handle data modification:
+Always declare validation rules by overriding `getRules()`:
 
 ```typescript
-const validationRules: ValidationRules = [
-    new StringValidator('name', { required: true, minLen: 2, maxLen: 100 }),
-    new NumberValidator('price', { required: true, minValue: 0 }),
-    new StringValidator('email', {
-        required: true,
-        format: { regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }
-    })
-];
+protected getRules(): ValidationRules {
+    return [
+        new StringValidator('name', { required: true, minLen: 2, maxLen: 100 }),
+        new NumberValidator('price', { required: true, minValue: 0 }),
+        new StringValidator('email', {
+            required: true,
+            format: { regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }
+        })
+    ];
+}
 ```
 
 ### 3. Error Handling
 
-Controllers automatically handle common errors:
-- `IllegalParameterError` - Validation failures
+Controllers automatically throw standard exceptions mapped by the framework:
+- `IllegalParameterError` - Data validation failures
 - `ActionNotFoundError` - Missing service methods
 - `UnauthenticatedError` - User not logged in
 
-### 4. Service Interface Requirements
-
-Ensure your service implements the required methods:
-
-**For AdminBaseController:**
-```typescript
-interface MyService {
-    createNew(data: any): Promise<any>;
-    update(data: any): Promise<any>;
-}
-```
-
-**For TenantBaseController:**
-```typescript
-interface MyService {
-    createNew(user: any, data: any): Promise<any>;
-    update(user: any, data: any): Promise<any>;
-}
-```
-
-**For Search Controllers:**
-```typescript
-interface MyService {
-    search(query: any, pagination: any): Promise<any>;  // Admin
-    search(user: any, query: any, pagination: any): Promise<any>;  // Tenant
-}
-```
+---
 
 ## Debug Mode
 
-Enable debug logging for controllers:
+Enable debug logging for controllers during development:
 
 ```typescript
-import BaseController from '@ticatec/common-express-server/common/BaseController';
+import { Controller } from '@ticatec/common-express-server';
 
-BaseController.debugEnabled = true;
+Controller.debugEnabled = true;
 ```
 
-This will log detailed information about request processing.
+This logs detailed debug information for data validation, entity construction, and service invocations.
+
+---
 
 ## Summary
 
-- **BaseController**: Foundation with logging and user context
-- **CommonController**: CRUD operations with validation
-- **AdminBaseController**: Platform admin, no tenant context
-- **TenantBaseController**: Tenant-specific operations with user context
-- **AdminSearchController**: Cross-tenant search operations
-- **TenantSearchController**: Tenant-scoped search operations
-
-Choose the appropriate controller based on your operational scope and tenant requirements.
+- **`BaseController`**: Foundation for logging, user retrieval, and user impersonation.
+- **`CommonController`**: Complete CRUD workflow with validation. Defaults to `[loggedUser, req.body]` service parameters and can be customized easily for platform admin use cases.
+- **`CommonSearchController`**: Ready-to-use search controller passing `[loggedUser, req.query]` to `service.search`.
 
 ---
 

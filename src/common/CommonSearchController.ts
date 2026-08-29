@@ -1,12 +1,12 @@
 import {Request} from "express";
-import TenantBaseController from "./TenantBaseController.js";
+import CommonController from "./CommonController.js";
 import Controller from "./Controller.js";
 
 /**
  * Interface with search capabilities for tenant use
  * @template T The service type this controller depends on
  */
-export default abstract class TenantSearchController<T> extends TenantBaseController<T> {
+export default class CommonSearchController<T> extends CommonController<T> {
 
     /**
      * Search method for querying entities with tenant context

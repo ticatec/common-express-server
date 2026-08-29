@@ -1,6 +1,6 @@
 {
   "name": "@ticatec/common-express-server",
-  "version": "1.0.1",
+  "version": "2.0.2",
   "description": "Enterprise-grade TypeScript framework for Express.js with built-in multi-tenant support, CRUD controllers, validation, authentication, and API gateway integration.",
   "type": "module",
   "main": "./lib/cjs/index.js",
@@ -97,7 +97,7 @@
   "devDependencies": {
     "@ticatec/bean-validator": "^1.0.0",
     "@ticatec/logger-wrapper": "^0.3.0",
-    "@ticatec/node-common-library": "^3.1.1",
+    "@ticatec/node-common-library": "^3.2.3",
     "@ticatec/node-exception": "^2.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",

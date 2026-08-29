@@ -23,6 +23,8 @@ A comprehensive TypeScript library providing common classes, controllers, and mi
 
 - **[Controller Guide](./CONTROLLER.md)** - Comprehensive guide on using controllers for CRUD and search operations
 
+> 🚀 **Major Upgrade Notice**: The controller hierarchy has been streamlined. The redundant subclasses (`AdminBaseController`, `TenantBaseController`, `AdminSearchController`, `TenantSearchController`) have been unified into `CommonController` and `CommonSearchController`. Validation rules are now cleanly configured by overriding `getRules(): ValidationRules`.
+
 ## Installation
 
 ```bash
@@ -211,7 +213,7 @@ declare module '@ticatec/common-express-server' {
 }
 ```
 
-Once registered, `this.getLoggedUser(req)` across all controllers, `TenantBaseController` arguments, and route user hooks will **automatically infer as `AppUser`**, avoiding generic boilerplate on every controller!
+Once registered, `this.getLoggedUser(req)` across all controllers, `CommonController` arguments, and route user hooks will **automatically infer as `AppUser`**, avoiding generic boilerplate on every controller!
 
 #### Custom User Validation
 
@@ -320,7 +322,7 @@ class PublicRoutes extends CommonRoutes {
 ### 3. Create Controllers
 
 ```typescript
-import { TenantBaseController } from '@ticatec/common-express-server';
+import { CommonController } from '@ticatec/common-express-server';
 import { ValidationRules, StringValidator } from '@ticatec/bean-validator';
 
 interface UserService {
@@ -340,13 +342,18 @@ const userValidationRules: ValidationRules = [
     })
 ];
 
-class UserController extends TenantBaseController<UserService> {
+class UserController extends CommonController<UserService> {
     constructor(userService: UserService) {
-        super(userService, userValidationRules);
+        super(userService);
     }
 
-    // CRUD methods are inherited and automatically validated
-    // createNew(), update(), del() are available
+    // Configure validation rules
+    protected getRules(): ValidationRules {
+        return userValidationRules;
+    }
+
+    // CRUD methods (createNew, update, del) are inherited and automatically validated,
+    // passing [loggedUser, req.body] to service methods by default.
 
     // Add custom methods
     search() {
@@ -435,12 +442,9 @@ Base class for route definitions featuring:
 
 ### Controller Hierarchy
 
-- **BaseController<T>**: Base controller with logging and user context
-- **CommonController<T>**: CRUD operations with validation
-- **AdminBaseController<T>**: Admin-specific operations (tenant-agnostic)
-- **TenantBaseController<T>**: Tenant-specific operations
-- **AdminSearchController<T>**: Admin search operations
-- **TenantSearchController<T>**: Tenant search operations
+- **BaseController<T>**: Base controller providing logging and user context access
+- **CommonController<T>**: Base CRUD controller with automatic validation and default user argument passing `[loggedUser, req.body]`
+- **CommonSearchController<T>**: Search controller providing out-of-the-box search query handling
 
 📚 **[Full Controller Usage Guide →](./CONTROLLER.md)**
 
@@ -557,18 +561,25 @@ The library supports user impersonation for debugging and troubleshooting:
 
 ## Multi-tenant Support
 
-The library provides built-in multi-tenant support:
+The library provides built-in multi-tenant support via `CommonController`:
 
 ```typescript
-// Tenant-specific controller
-class ProductController extends TenantBaseController<ProductService> {
+// Standard / Tenant controller (defaults to passing logged user)
+class ProductController extends CommonController<ProductService> {
     // Automatically receives logged user context
-    // All operations are tenant-scoped
+    // All CRUD operations pass [loggedUser, req.body] to service methods
 }
 
-// Admin controller (cross-tenant)
-class SystemController extends AdminBaseController<SystemService> {
-    // Operations across all tenants
+// Admin controller (cross-tenant / platform operations)
+class SystemController extends CommonController<SystemService> {
+    // Override argument builders to omit the user parameter if needed
+    protected getCreateNewArguments(req: Request): Array<any> {
+        return [req.body];
+    }
+
+    protected getUpdateArguments(req: Request): Array<any> {
+        return [req.body];
+    }
 }
 ```
 
@@ -593,7 +604,11 @@ const rules: ValidationRules = [
 
 class UserController extends CommonController<UserService> {
     constructor(service: UserService) {
-        super(service, rules); // Validation applied automatically
+        super(service);
+    }
+
+    protected getRules(): ValidationRules {
+        return rules; // Validation applied automatically on createNew() & update()
     }
 }
 ```

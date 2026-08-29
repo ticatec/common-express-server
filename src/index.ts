@@ -11,10 +11,7 @@ export { default as LoggedUser, CommonUser, CustomUserRegistry, RegisteredUser }
 export { default as Controller } from './common/Controller.js';
 export { default as BaseController } from './common/BaseController.js';
 export { default as CommonController } from './common/CommonController.js';
-export { default as AdminBaseController } from './common/AdminBaseController.js';
-export { default as TenantBaseController } from './common/TenantBaseController.js';
-export { default as AdminSearchController } from './common/AdminSearchController.js';
-export { default as TenantSearchController } from './common/TenantSearchController.js';
+export { default as CommonSearchController } from './common/CommonSearchController.js';
 
 export { HealthCheckRegistry } from './health/HealthCheckRegistry.js';
 export { HealthRoutes } from './health/HealthRoutes.js';

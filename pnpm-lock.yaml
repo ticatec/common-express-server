@@ -15,8 +15,8 @@ importers:
         specifier: ^0.3.0
         version: 0.3.0
       '@ticatec/node-common-library':
-        specifier: ^3.1.0
-        version: 3.1.0(@ticatec/logger-wrapper@0.3.0)
+        specifier: ^3.1.1
+        version: 3.2.3
       '@ticatec/node-exception':
         specifier: ^2.0.0
         version: 2.0.0
@@ -377,11 +377,9 @@ packages:
     resolution: {integrity: sha512-762c+OH11UDHJQ6s+XjJQZ+3QwrL5DXeVDRzatcjSfMAbj80mP0n+lkHxT7CVfj7w45j+3rlTg1LoHSeiGgUCg==}
     engines: {node: '>=16.0.0'}
 
-  '@ticatec/node-common-library@3.1.0':
-    resolution: {integrity: sha512-CdANp8xCDX0oY6gcQ+C4srAQSMm8k3RJtLgyAwXWun2cK124bmtzchb+ZZMoS2nJ1JIUGAqZheKBQIJ6k9mSlw==}
+  '@ticatec/node-common-library@3.2.3':
+    resolution: {integrity: sha512-5r15SOenqR7XZ+aTYqRHB3rSo3P259TQa8sYLh52XGXFkFkffdY8QYup0WXTAi9NcuyPXKgdqk4iogSts9Uxjg==}
     engines: {node: '>=18.0.0', npm: '>=6.0.0'}
-    peerDependencies:
-      '@ticatec/logger-wrapper': ^0.1.0
 
   '@ticatec/node-exception@2.0.0':
     resolution: {integrity: sha512-x9rpdlpLCu48rkU7KDRST2GKc6F84OeZny39Q+mAWr6ZEznXoUP+jkfpGTyQ2zKPislN6/n4Qt+5PmpvSdJ0Pg==}
@@ -2327,9 +2325,8 @@ snapshots:
     dependencies:
       pino: 9.14.0
 
-  '@ticatec/node-common-library@3.1.0(@ticatec/logger-wrapper@0.3.0)':
+  '@ticatec/node-common-library@3.2.3':
     dependencies:
-      '@ticatec/logger-wrapper': 0.3.0
       reflect-metadata: 0.2.2
       uuid: 13.0.2
 

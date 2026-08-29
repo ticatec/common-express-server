@@ -10,10 +10,9 @@ import AppConf from '../AppConf.js';
 import ProcessorManager from '../ProcessorManager.js';
 import CommonProcessor from '../CommonProcessor.js';
 import routerHelper from '../RouterHelper.js';
-import AdminBaseController from '../common/AdminBaseController.js';
-import AdminSearchController from '../common/AdminSearchController.js';
-import TenantBaseController from '../common/TenantBaseController.js';
-import TenantSearchController from '../common/TenantSearchController.js';
+import CommonController from '../common/CommonController.js';
+import CommonSearchController from '../common/CommonSearchController.js';
+import BaseController from '../common/BaseController.js';
 import CommonRoutes, { AuthenticatedRoutes } from '../CommonRoutes.js';
 import BaseServer from '../BaseServer.js';
 import { HealthCheckRegistry } from '../health/HealthCheckRegistry.js';
@@ -53,33 +52,21 @@ class MockService {
     }
 }
 
-class TestAdminController extends AdminBaseController<MockService> {
+class TestCommonController extends CommonController<MockService> {
     constructor(service: MockService) {
         super(service);
     }
 }
 
-class TestAdminSearchController extends AdminSearchController<MockService> {
+class TestSearchController extends CommonSearchController<MockService> {
     constructor(service: MockService) {
         super(service);
     }
 }
 
-class TestEmptyAdminSearchController extends AdminSearchController<any> {
+class TestEmptySearchController extends CommonSearchController<any> {
     constructor() {
         super({});
-    }
-}
-
-class TestTenantController extends TenantBaseController<MockService> {
-    constructor(service: MockService) {
-        super(service);
-    }
-}
-
-class TestTenantSearchController extends TenantSearchController<MockService> {
-    constructor(service: MockService) {
-        super(service);
     }
 }
 
@@ -178,12 +165,10 @@ describe('common-express-server comprehensive test suite', () => {
         expect(req.user.accountCode).toBe('U100');
     });
 
-    test('should execute Admin & Tenant controller methods correctly', async () => {
+    test('should execute Common controller methods with logged user as first argument', async () => {
         const service = new MockService();
-        const adminCtrl = new TestAdminController(service);
-        const adminSearchCtrl = new TestAdminSearchController(service);
-        const tenantCtrl = new TestTenantController(service);
-        const tenantSearchCtrl = new TestTenantSearchController(service);
+        const commonCtrl = new TestCommonController(service);
+        const searchCtrl = new TestSearchController(service);
 
         const mockReq: any = {
             method: 'POST',
@@ -193,28 +178,25 @@ describe('common-express-server comprehensive test suite', () => {
             user: { accountCode: 'U1' }
         };
 
-        const createdAdmin = await adminCtrl.createNew()(mockReq);
-        expect(createdAdmin).toEqual({ id: 1, userOrData: { title: 'New Item' }, dataOrNil: undefined });
+        const created = await commonCtrl.createNew()(mockReq);
+        expect(created).toEqual({ id: 1, userOrData: { accountCode: 'U1' }, dataOrNil: { title: 'New Item' } });
 
-        const searchedAdmin = await adminSearchCtrl.search()(mockReq);
-        expect(searchedAdmin).toEqual([{ id: 1, userOrQuery: { name: 'filter' }, queryOrNil: undefined }]);
+        const updated = await commonCtrl.update()(mockReq);
+        expect(updated).toEqual({ updated: true, userOrData: { accountCode: 'U1' }, dataOrNil: { title: 'New Item' } });
 
-        const createdTenant = await tenantCtrl.createNew()(mockReq);
-        expect(createdTenant).toEqual({ id: 1, userOrData: { accountCode: 'U1' }, dataOrNil: { title: 'New Item' } });
-
-        const searchedTenant = await tenantSearchCtrl.search()(mockReq);
-        expect(searchedTenant).toEqual([{ id: 1, userOrQuery: { accountCode: 'U1' }, queryOrNil: { name: 'filter' } }]);
+        const searched = await searchCtrl.search()(mockReq);
+        expect(searched).toEqual([{ id: 1, userOrQuery: { accountCode: 'U1' }, queryOrNil: { name: 'filter' } }]);
     });
 
-    test('should throw ActionNotFoundError when service lacks search interface', () => {
-        const emptyAdminSearch = new TestEmptyAdminSearchController();
+    test('should throw ActionNotFoundError when service lacks search interface', async () => {
+        const emptySearch = new TestEmptySearchController();
         const mockReq: any = { query: {} };
-        expect(() => emptyAdminSearch.search()(mockReq)).toThrow();
+        await expect(emptySearch.search()(mockReq)).rejects.toThrow();
     });
 
     test('should validate create and update with template method rules independently', async () => {
         const service = new MockService();
-        class CustomValidationController extends AdminBaseController<MockService> {
+        class CustomValidationController extends CommonController<MockService> {
             constructor(svc: MockService) {
                 super(svc);
             }
@@ -314,7 +296,7 @@ describe('common-express-server comprehensive test suite', () => {
     });
 
     test('should resolve RegisteredUser type from Controller.getLoggedUser without generic boilerplate', () => {
-        class RegistryTenantController extends TenantBaseController<MockService> {
+        class RegistryCommonController extends BaseController<MockService> {
             constructor(service: MockService) {
                 super(service);
             }
@@ -324,7 +306,7 @@ describe('common-express-server comprehensive test suite', () => {
         }
 
         const service = new MockService();
-        const ctrl = new RegistryTenantController(service);
+        const ctrl = new RegistryCommonController(service);
         const mockReq: any = {
             user: { accountCode: 'U999', name: 'ServerUser', roles: ['admin'] }
         };

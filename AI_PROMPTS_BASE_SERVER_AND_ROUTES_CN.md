@@ -10,7 +10,7 @@
 
 1. **Web 层 (`routes` + `controller`)**:
    - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): 处理 HTTP 路由映射、请求头校验、中间件绑定与认证 (`isValidUser`)。
-   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
+   - **Controller** (`Controller`, `BaseController`, `CommonController`, `CommonSearchController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
 2. **Service 业务逻辑层 (`service`)**:
    - 处理核心业务逻辑、领域校验、状态转换与事务（Transaction）管理。
    - 依赖 **Repository 层** 进行领域数据的读取与持久化操作。
@@ -210,7 +210,7 @@ src/
      - PUT /profile - 更新用户资料
      - POST /change-password - 修改密码
    - ProductRoutes: 继承 CommonRoutes，实现租户验证
-     - 使用 TenantBaseController 和 TenantSearchController
+      - 使用 CommonController 和 CommonSearchController
      - 提供产品 CRUD 路由
    - AdminRoutes: 继承 CommonRoutes，实现管理员验证
      - 提供用户管理路由

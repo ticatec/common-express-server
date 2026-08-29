@@ -10,7 +10,7 @@ When developing applications or writing code with AI assistance, strictly adhere
 
 1. **Web Layer (`routes` + `controller`)**:
    - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): Handles HTTP route binding, header validation, middleware registration, and authentication (`isValidUser`).
-   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
+   - **Controller** (`Controller`, `BaseController`, `CommonController`, `CommonSearchController`, etc.): Parses Web requests, validates input DTOs, extracts logged-in context via `this.getLoggedUser(req)`, and delegates calls to the **Service Layer**. The Web layer **must not** execute raw database queries or complex domain logic directly.
 2. **Service Layer (`service`)**:
    - Handles core business rules, domain validation, state transitions, and transaction management.
    - Interacts with the **Repository Layer** for domain entity retrieval and persistence.
@@ -36,7 +36,7 @@ Please help me register a server-wide custom user model for @ticatec/common-expr
 3. Use declare module '@ticatec/common-express-server' for TypeScript declaration merging
 4. Register user: AppUser inside CustomUserRegistry
 
-Generate complete code and explain how this.getLoggedUser(req) across all controllers (e.g. TenantBaseController) will automatically infer as AppUser.
+Generate complete code and explain how this.getLoggedUser(req) across all controllers (e.g. CommonController) will automatically infer as AppUser.
 ```
 
 ---
@@ -108,13 +108,14 @@ Please help me create a controller class that extends CommonController for produ
 interface ProductService {
     createNew(user: any, data: ProductCreateRequest): Promise<Product>;
     update(user: any, data: ProductUpdateRequest): Promise<Product>;
+    del(id: string): Promise<void>;
 }
 ```
 3. Request data types:
 ```typescript
 interface ProductCreateRequest {
     name: string;
-    description: string;
+    description?: string;
     price: number;
     category: string;
     stock: number;
@@ -130,30 +131,29 @@ interface ProductUpdateRequest {
 }
 ```
 4. Validation rules:
+   - Configure rules by overriding `protected getRules(): ValidationRules`
    - name: required, string, 2-100 chars
    - price: required, number, >= 0
    - category: required, string
    - stock: required, integer, >= 0
    - description: optional, string, max 500 chars
-5. Implement abstract methods:
-   - getCreateNewArguments() - return [loggedUser, req.body]
-   - getUpdateArguments() - return [loggedUser, req.body]
+5. CRUD argument passing:
+   - Note that CommonController defaults to passing [this.getLoggedUser(req), req.body] to createNew and update
 6. Override buildNewEntry() and buildUpdatedEntry():
    - Add createdAt or updatedAt timestamp
-   - Add createdBy or updatedBy user info
 7. Add custom methods:
    - getCategories() - Get product categories list
-   - updateStock() - Update stock (requires new validation rules)
+   - updateStock() - Update stock (with custom validation)
 
 Please generate complete controller code.
 ```
 
 ---
 
-## Prompt 4: Create Tenant Controller with TenantBaseController
+## Prompt 4: Create Multi-Tenant Business Controller with CommonController
 
 ```
-Please help me create a controller class that extends TenantBaseController for order management. Requirements:
+Please help me create a controller class that extends CommonController for multi-tenant order management. Requirements:
 
 1. Class name: OrderController
 2. Service interface:
@@ -161,6 +161,7 @@ Please help me create a controller class that extends TenantBaseController for o
 interface OrderService {
     createNew(user: CommonUser, data: OrderCreateRequest): Promise<Order>;
     update(user: CommonUser, data: OrderUpdateRequest): Promise<Order>;
+    del(id: string): Promise<void>;
     cancel(user: CommonUser, orderId: string, reason: string): Promise<Order>;
     getHistory(user: CommonUser, params: any): Promise<Order[]>;
 }
@@ -187,21 +188,17 @@ interface OrderItem {
 }
 ```
 4. Validation rules:
+   - Declare via `protected getRules(): ValidationRules`
    - items: required, array, min 1 element
    - shippingAddress: required, object
    - paymentMethod: required, enum ['credit_card', 'paypal', 'bank_transfer']
    - items[].productId: required, string
    - items[].quantity: required, integer, > 0
    - items[].price: required, number, > 0
-5. Implement abstract methods:
-   - getCreateNewArguments() - return [loggedUser, validatedData]
-   - getUpdateArguments() - return [loggedUser, validatedData]
-6. Override buildNewEntry():
-   - Add tenant ID: user.tenant.code
-   - Add order number: auto-generate
-   - Add order status: 'pending'
+5. Override buildNewEntry():
+   - Add auto-generated order status: 'pending'
    - Add creation timestamp
-7. Add custom endpoint methods:
+6. Add custom endpoint methods:
    - cancel() - Cancel order
    - getHistory() - Get order history
    - Each method uses this.checkInterface() to verify service
@@ -212,10 +209,10 @@ Please generate complete controller code with type definitions.
 
 ---
 
-## Prompt 5: Create Admin Controller with AdminBaseController
+## Prompt 5: Create Platform Admin Controller with CommonController
 
 ```
-Please help me create a controller class that extends AdminBaseController for system user management. Requirements:
+Please help me create a platform admin controller class that extends CommonController for system user management (tenant-agnostic). Requirements:
 
 1. Class name: SystemUserController
 2. Service interface:
@@ -223,7 +220,7 @@ Please help me create a controller class that extends AdminBaseController for sy
 interface SystemUserService {
     createNew(data: UserCreateRequest): Promise<SystemUser>;
     update(data: UserUpdateRequest): Promise<SystemUser>;
-    delete(userId: string): Promise<void>;
+    del(userId: string): Promise<void>;
     assignRole(userId: string, roleId: string): Promise<void>;
     resetPassword(userId: string, newPassword: string): Promise<void>;
 }
@@ -234,7 +231,7 @@ interface UserCreateRequest {
     email: string;
     name: string;
     role: string;
-    isActive: boolean;
+    isActive?: boolean;
 }
 
 interface UserUpdateRequest {
@@ -246,42 +243,40 @@ interface UserUpdateRequest {
 }
 ```
 4. Validation rules:
+   - Declare via `protected getRules(): ValidationRules`
    - email: required, valid email format
    - name: required, string, 2-100 chars
-   - role: required, string, enum values
+   - role: required, string
    - isActive: optional, boolean
-5. Implement abstract methods:
-   - getCreateNewArguments() - return [req.body] (no user parameter needed)
-   - getUpdateArguments() - return [req.body]
+5. Override argument builders to omit user parameter:
+   - `protected getCreateNewArguments(req: Request): Array<any>` -> return [req.body]
+   - `protected getUpdateArguments(req: Request): Array<any>` -> return [req.body]
 6. Override buildNewEntry():
    - Add password hash (if password provided)
    - Add creation timestamp
    - Set default isActive to true
 7. Add custom methods:
-   - delete() - Delete user (override _del method)
    - assignRole() - Assign role
    - resetPassword() - Reset password
-
-Notes:
-- AdminBaseController service methods don't need user parameter
-- All operations are cross-tenant
-- Admin permission verification should be added at route level
 
 Please generate complete controller code.
 ```
 
 ---
 
-## Prompt 6: Create Search Controller with TenantSearchController
+## Prompt 6: Create Search Controller with CommonSearchController
 
 ```
-Please help me create a controller class that extends TenantSearchController for product search. Requirements:
+Please help me create a controller class that extends CommonSearchController for product search. Requirements:
 
 1. Class name: ProductSearchController
 2. Service interface:
 ```typescript
 interface ProductSearchService {
-    search(user: CommonUser, query: ProductQuery, pagination: Pagination): Promise<SearchResult<Product>>;
+    createNew(user: CommonUser, data: any): Promise<Product>;
+    update(user: CommonUser, data: any): Promise<Product>;
+    del(id: string): Promise<void>;
+    search(user: CommonUser, query: ProductQuery): Promise<SearchResult<Product>>;
     getCategories(user: CommonUser): Promise<string[]>;
     getFeaturedProducts(user: CommonUser, limit: number): Promise<Product[]>;
 }
@@ -294,39 +289,22 @@ interface ProductQuery {
     minPrice?: number;
     maxPrice?: number;
     inStock?: boolean;
-    sortBy?: 'name' | 'price' | 'createdAt';
-    sortOrder?: 'asc' | 'desc';
-}
-
-interface Pagination {
-    page: number;
-    pageSize: number;
+    page?: number;
+    pageSize?: number;
 }
 
 interface SearchResult<T> {
     items: T[];
     total: number;
-    page: number;
-    pageSize: number;
 }
 ```
-4. Implement methods:
-   - search() - Main search method
-     - Use buildSearchQuery(req) to build query from req.query
-     - Use buildPagination(req) to build pagination from req.query
-     - Call service interface: [user, query, pagination]
-   - buildSearchQuery() - Helper method to build query from request
-     - Parse keyword, category, price range, stock params
-     - Validate parameter validity
-   - buildPagination() - Helper method to build pagination from request
-     - Default page: 1, pageSize: 20
-     - Limit max pageSize to 100
-5. Add additional search endpoints:
-   - byCategory() - Search by category
-   - byPriceRange() - Search by price range
+4. Search implementation:
+   - Inherits `search()` method automatically from `CommonSearchController`, which passes `[this.getLoggedUser(req), req.query]` to `service.search`.
+5. Add additional custom search endpoints:
+   - getCategories() - Get categories
    - getFeatured() - Get featured products
 
-Please generate complete controller code with helper methods and type definitions.
+Please generate complete controller code with type definitions.
 ```
 
 ---
@@ -334,12 +312,11 @@ Please generate complete controller code with helper methods and type definition
 ## Prompt 7: Integrate Controllers into Routes
 
 ```
-Please help me create a complete route class that uses various controllers. Requirements:
+Please help me create a complete route class that uses CommonController and CommonSearchController. Requirements:
 
 1. Create ProductRoutes class extending CommonRoutes
 2. Import and instantiate these controllers:
-   - ProductController (TenantBaseController)
-   - ProductSearchController (TenantSearchController)
+   - ProductController (CommonController or CommonSearchController)
 3. Implement isValidUser():
    - Verify user is logged in
    - Verify user is associated with valid tenant
@@ -347,10 +324,9 @@ Please help me create a complete route class that uses various controllers. Requ
    - POST /products - Create product (use productController.createNew())
    - PUT /products/:id - Update product (use productController.update())
    - DELETE /products/:id - Delete product (use productController.del())
-   - GET /products - Search products (use searchController.buildQuery())
+   - GET /products - Search products (use productController.search())
    - GET /products/categories - Get categories (use productController.getCategories())
-   - GET /products/featured - Get featured products (use searchController.getFeatured())
-5. Wrap all routes with routerHelper.invokeRestfulAction()
+5. Wrap all route actions with routerHelper.invokeRestfulAction()
 6. Add appropriate logging
 
 Please generate complete route class code.
@@ -364,40 +340,33 @@ Please generate complete route class code.
 Please help me create a complete controller and route structure for a blog system. Requirements:
 
 System requirements:
-1. Article management (tenant level)
+1. Article management with search (tenant level)
 2. Comment management (tenant level)
-3. User management (admin level)
+3. User management (admin level, tenant-agnostic)
 4. Tag management (global, admin level)
 
 Need to create:
 
-1. ArticleController (extends TenantBaseController)
-   - Service interface: ArticleService
-   - Methods: createNew, update, delete, publish, unpublish
+1. ArticleController (extends CommonSearchController)
+   - Service interface: ArticleService (createNew, update, del, search, publish)
    - Validation rules: title, content, tags
 
-2. ArticleSearchController (extends TenantSearchController)
-   - Service interface: ArticleSearchService
-   - Methods: search, byTag, byAuthor, byDateRange
-   - Support pagination and sorting
-
-3. CommentController (extends TenantBaseController)
-   - Service interface: CommentService
-   - Methods: createNew, update, delete
+2. CommentController (extends CommonController)
+   - Service interface: CommentService (createNew, update, del)
    - Validation rules: articleId, content
 
-4. UserController (extends AdminBaseController)
-   - Service interface: UserAdminService
-   - Methods: createNew, update, delete, activate, deactivate
+3. UserController (extends CommonController)
+   - Service interface: UserAdminService (createNew, update, del, activate, deactivate)
+   - Overrides getCreateNewArguments & getUpdateArguments to omit user parameter
    - Validation rules: email, name, role
 
-5. TagController (extends AdminBaseController)
-   - Service interface: TagService
-   - Methods: createNew, update, delete, merge
+4. TagController (extends CommonController)
+   - Service interface: TagService (createNew, update, del, merge)
+   - Overrides getCreateNewArguments & getUpdateArguments to omit user parameter
    - Validation rules: name, color
 
-6. Route classes:
-   - ArticleRoutes - Integrate ArticleController and ArticleSearchController
+5. Route classes:
+   - ArticleRoutes - Integrate ArticleController
    - CommentRoutes - Integrate CommentController
    - AdminUserRoutes - Integrate UserController
    - AdminTagRoutes - Integrate TagController
@@ -405,7 +374,7 @@ Need to create:
 Please generate complete code for all controllers and route classes, including:
 - Service interface definitions
 - Data type definitions
-- Validation rules
+- Validation rules via getRules()
 - Implementation details
 - JSDoc comments
 ```
@@ -415,62 +384,54 @@ Please generate complete code for all controllers and route classes, including:
 ## Usage Tips
 
 1. **Choose appropriate controller base class**:
-   - Simple operations without service layer → Controller
-   - General business logic → BaseController
-   - Need CRUD operations → CommonController
-   - Tenant-level operations → TenantBaseController/TenantSearchController
-   - Admin-level operations → AdminBaseController/AdminSearchController
+   - Simple operations without service layer → `Controller`
+   - Custom business logic endpoints → `BaseController`
+   - Need standard CRUD operations with validation → `CommonController`
+   - Need CRUD operations and search functionality → `CommonSearchController`
 
 2. **Validation rules**:
-   - Always define validation rules for data modification operations
-   - Use validators from @ticatec/bean-validator
-   - Override buildNewEntry/buildUpdatedEntry to add extra data
+   - Always define validation rules by overriding `protected getRules(): ValidationRules`
+   - Use validators from `@ticatec/bean-validator`
+   - Override `buildNewEntry`/`buildUpdatedEntry` to enrich or prepare data before validation
 
 3. **Service interface**:
-   - Ensure service method signatures match controller expectations
-   - AdminBaseController doesn't need user parameter
-   - TenantBaseController first parameter is user
+   - By default, `CommonController` passes `[loggedUser, req.body]` to `createNew` and `update`
+   - For platform admin operations without user parameter, override `getCreateNewArguments` and `getUpdateArguments` to return `[req.body]`
+   - `CommonSearchController.search()` passes `[loggedUser, req.query]` to `service.search`
 
 4. **Debugging**:
-   - Set `BaseController.debugEnabled = true` to enable debug logging
-   - Use this.logger to log important operations
+   - Set `Controller.debugEnabled = true` to enable detailed controller debugging logs
 
 ---
 
 ## Controller Hierarchy Quick Reference
 
 ```
-Controller (Base Functionality)  
-  ├── BaseController<T> (Service Injection)  
-  └── CommonController<T> (CRUD + Validation)  
-    ├── AdminBaseController<T> (Admin, No Tenant)  
-    │ └── AdminSearchController<T> (Admin Search)  
-    └── TenantBaseController<T> (Tenant-Specific)  
-      └── TenantSearchController<T> (Tenant Search)  
+Controller (Base Class with Logger & User Access)
+  └── BaseController<T> (Service Injection)
+        └── CommonController<T> (CRUD + Automatic Validation)
+              └── CommonSearchController<T> (Search Support)
 ```
 
-### Service Method Signatures by Controller:
+### Service Method Signatures by Default:
 
-**AdminBaseController:**
-```typescript
-service.createNew(data: any): Promise<any>
-service.update(data: any): Promise<any>
-```
-
-**TenantBaseController:**
+**CommonController (Default / Multi-Tenant):**
 ```typescript
 service.createNew(user: any, data: any): Promise<any>
 service.update(user: any, data: any): Promise<any>
+service.del(id: string): Promise<any>
 ```
 
-**AdminSearchController:**
+**CommonController (Platform Admin / Custom Arguments):**
 ```typescript
-service.search(query: any, pagination: any): Promise<any>
+service.createNew(data: any): Promise<any>
+service.update(data: any): Promise<any>
+service.del(id: string): Promise<any>
 ```
 
-**TenantSearchController:**
+**CommonSearchController:**
 ```typescript
-service.search(user: any, query: any, pagination: any): Promise<any>
+service.search(user: any, query: any): Promise<any>
 ```
 
 ---

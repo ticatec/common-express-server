@@ -10,7 +10,7 @@
 
 1. **Web 层 (`routes` + `controller`)**:
    - **Routes** (`CommonRoutes` / `AuthenticatedRoutes`): 处理 HTTP 路由映射、请求头校验、中间件绑定与认证 (`isValidUser`)。
-   - **Controller** (`Controller`, `BaseController`, `TenantBaseController`, `AdminBaseController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
+   - **Controller** (`Controller`, `BaseController`, `CommonController`, `CommonSearchController` 等): 负责解析 Web 请求、提取 DTO 入参和 `this.getLoggedUser(req)` 登录上下文，并将其传给 **Service 层**。Web 层**严禁**直接编写业务规则或执行 SQL 数据库查询。
 2. **Service 业务逻辑层 (`service`)**:
    - 处理核心业务逻辑、领域校验、状态转换与事务（Transaction）管理。
    - 依赖 **Repository 层** 进行领域数据的读取与持久化操作。
@@ -21,6 +21,8 @@
    - 负责最底层的数据库通信与 SQL / ORM 执行（如基于 `@ticatec/pg-common-library` 或数据库连接池执行具体增删改查）。
 
 ---
+
+## Prompt 0: 通过 CustomUserRegistry 注册服务器级自定义用户模型
 
 ```
 请帮我在 TypeScript 项目中为 @ticatec/common-express-server 注册 Server 级别的自定义用户类型。要求如下：
@@ -34,7 +36,7 @@
 3. 使用 declare module '@ticatec/common-express-server' 进行 TypeScript 模块扩展（Declaration Merging）
 4. 在 CustomUserRegistry 中注册 user: AppUser
 
-请生成完整的代码，并说明之后框架内所有 Controller（如 TenantBaseController）中 this.getLoggedUser(req) 将自动推导为 AppUser。
+请生成完整的代码，并说明之后框架内所有 Controller（如 CommonController）中 this.getLoggedUser(req) 将自动推导为 AppUser。
 ```
 
 ---
@@ -106,13 +108,14 @@ interface NotificationService {
 interface ProductService {
     createNew(user: any, data: ProductCreateRequest): Promise<Product>;
     update(user: any, data: ProductUpdateRequest): Promise<Product>;
+    del(id: string): Promise<void>;
 }
 ```
 3. 请求数据类型：
 ```typescript
 interface ProductCreateRequest {
     name: string;
-    description: string;
+    description?: string;
     price: number;
     category: string;
     stock: number;
@@ -128,30 +131,29 @@ interface ProductUpdateRequest {
 }
 ```
 4. 验证规则：
+   - 通过覆写 protected getRules(): ValidationRules 声明规则
    - name: 必填，字符串，2-100字符
    - price: 必填，数字，>= 0
    - category: 必填，字符串
    - stock: 必填，整数，>= 0
    - description: 可选，字符串，最多500字符
-5. 实现抽象方法：
-   - getCreateNewArguments() - 返回 [loggedUser, req.body]
-   - getUpdateArguments() - 返回 [loggedUser, req.body]
-6. 重写 buildNewEntry() 和 buildUpdatedEntry()：
+5. 参数传递：
+   - 了解 CommonController 默认将 [this.getLoggedUser(req), req.body] 作为入参传递给 createNew 和 update
+6. 覆写 buildNewEntry() 和 buildUpdatedEntry()：
    - 添加 createdAt 或 updatedAt 时间戳
-   - 添加 createdBy 或 updatedBy 用户信息
 7. 添加自定义方法：
    - getCategories() - 获取产品分类列表
-   - updateStock() - 更新库存（需要新的验证规则）
+   - updateStock() - 更新库存（带自定义校验）
 
 请生成完整的控制器代码。
 ```
 
 ---
 
-## Prompt 4: 使用 TenantBaseController 创建租户控制器
+## Prompt 4: 使用 CommonController 创建多租户业务控制器
 
 ```
-请帮我创建一个继承自 TenantBaseController 的控制器类，用于订单管理。要求如下：
+请帮我创建一个继承自 CommonController 的控制器类，用于多租户订单管理。要求如下：
 
 1. 类名为 OrderController
 2. 服务接口定义：
@@ -159,6 +161,7 @@ interface ProductUpdateRequest {
 interface OrderService {
     createNew(user: CommonUser, data: OrderCreateRequest): Promise<Order>;
     update(user: CommonUser, data: OrderUpdateRequest): Promise<Order>;
+    del(id: string): Promise<void>;
     cancel(user: CommonUser, orderId: string, reason: string): Promise<Order>;
     getHistory(user: CommonUser, params: any): Promise<Order[]>;
 }
@@ -185,21 +188,17 @@ interface OrderItem {
 }
 ```
 4. 验证规则：
+   - 通过 protected getRules(): ValidationRules 声明
    - items: 必填，数组，至少1个元素
    - shippingAddress: 必填，对象
    - paymentMethod: 必填，枚举 ['credit_card', 'paypal', 'bank_transfer']
    - items[].productId: 必填，字符串
    - items[].quantity: 必填，整数，> 0
    - items[].price: 必填，数字，> 0
-5. 实现抽象方法：
-   - getCreateNewArguments() - 返回 [loggedUser, validatedData]
-   - getUpdateArguments() - 返回 [loggedUser, validatedData]
-6. 重写 buildNewEntry()：
-   - 添加租户ID：user.tenant.code
-   - 添加订单号：自动生成
+5. 覆写 buildNewEntry()：
    - 添加订单状态：'pending'
    - 添加创建时间戳
-7. 添加自定义端点方法：
+6. 添加自定义端点方法：
    - cancel() - 取消订单
    - getHistory() - 获取订单历史
    - 每个方法使用 this.checkInterface() 验证服务接口
@@ -210,10 +209,10 @@ interface OrderItem {
 
 ---
 
-## Prompt 5: 使用 AdminBaseController 创建管理员控制器
+## Prompt 5: 使用 CommonController 创建平台管理员控制器（与租户无关）
 
 ```
-请帮我创建一个继承自 AdminBaseController 的控制器类，用于系统用户管理。要求如下：
+请帮我创建一个继承自 CommonController 的平台管理员控制器类，用于系统用户管理（无租户/跨租户）。要求如下：
 
 1. 类名：SystemUserController
 2. 服务接口：
@@ -221,7 +220,7 @@ interface OrderItem {
 interface SystemUserService {
     createNew(data: UserCreateRequest): Promise<SystemUser>;
     update(data: UserUpdateRequest): Promise<SystemUser>;
-    delete(userId: string): Promise<void>;
+    del(userId: string): Promise<void>;
     assignRole(userId: string, roleId: string): Promise<void>;
     resetPassword(userId: string, newPassword: string): Promise<void>;
 }
@@ -232,7 +231,7 @@ interface UserCreateRequest {
     email: string;
     name: string;
     role: string;
-    isActive: boolean;
+    isActive?: boolean;
 }
 
 interface UserUpdateRequest {
@@ -244,42 +243,40 @@ interface UserUpdateRequest {
 }
 ```
 4. 验证规则：
+   - 通过 protected getRules(): ValidationRules 声明
    - email: 必填，有效的邮箱格式
    - name: 必填，字符串，2-100字符
-   - role: 必填，字符串，枚举值
+   - role: 必填，字符串
    - isActive: 可选，布尔值
-5. 实现抽象方法：
-   - getCreateNewArguments() - 返回 [req.body]（不需要用户参数）
-   - getUpdateArguments() - 返回 [req.body]
-6. 重写 buildNewEntry()：
+5. 覆写入参构建方法以省略 user 参数：
+   - protected getCreateNewArguments(req: Request): Array<any> -> 返回 [req.body]
+   - protected getUpdateArguments(req: Request): Array<any> -> 返回 [req.body]
+6. 覆写 buildNewEntry()：
    - 添加密码哈希（如果提供了密码）
    - 添加创建时间
    - 设置默认 isActive 为 true
 7. 添加自定义方法：
-   - delete() - 删除用户（重写 _del 方法）
    - assignRole() - 分配角色
    - resetPassword() - 重置密码
-
-注意事项：
-- AdminBaseController 的服务方法不需要 user 参数
-- 所有操作都是跨租户的
-- 需要在路由层面添加管理员权限验证
 
 请生成完整的控制器代码。
 ```
 
 ---
 
-## Prompt 6: 使用 TenantSearchController 创建搜索控制器
+## Prompt 6: 使用 CommonSearchController 创建搜索控制器
 
 ```
-请帮我创建一个继承自 TenantSearchController 的控制器类，用于产品搜索。要求如下：
+请帮我创建一个继承自 CommonSearchController 的控制器类，用于产品搜索。要求如下：
 
 1. 类名：ProductSearchController
 2. 服务接口：
 ```typescript
 interface ProductSearchService {
-    search(user: CommonUser, query: ProductQuery, pagination: Pagination): Promise<SearchResult<Product>>;
+    createNew(user: CommonUser, data: any): Promise<Product>;
+    update(user: CommonUser, data: any): Promise<Product>;
+    del(id: string): Promise<void>;
+    search(user: CommonUser, query: ProductQuery): Promise<SearchResult<Product>>;
     getCategories(user: CommonUser): Promise<string[]>;
     getFeaturedProducts(user: CommonUser, limit: number): Promise<Product[]>;
 }
@@ -292,39 +289,22 @@ interface ProductQuery {
     minPrice?: number;
     maxPrice?: number;
     inStock?: boolean;
-    sortBy?: 'name' | 'price' | 'createdAt';
-    sortOrder?: 'asc' | 'desc';
-}
-
-interface Pagination {
-    page: number;
-    pageSize: number;
+    page?: number;
+    pageSize?: number;
 }
 
 interface SearchResult<T> {
     items: T[];
     total: number;
-    page: number;
-    pageSize: number;
 }
 ```
-4. 实现以下方法：
-   - search() - 主要搜索方法
-     - 使用 buildSearchQuery(req) 从 req.query 构建查询对象
-     - 使用 buildPagination(req) 从 req.query 构建分页对象
-     - 调用服务接口：[user, query, pagination]
-   - buildSearchQuery() - 辅助方法，从请求构建查询对象
-     - 解析 keyword, category, price range, stock 等参数
-     - 验证参数有效性
-   - buildPagination() - 辅助方法，从请求构建分页对象
-     - 默认 page: 1, pageSize: 20
-     - 限制最大 pageSize 为 100
-5. 添加额外的搜索端点：
-   - byCategory() - 按分类搜索
-   - byPriceRange() - 按价格范围搜索
+4. 搜索实现：
+   - 自动继承 CommonSearchController 的 search() 方法，默认自动将 [this.getLoggedUser(req), req.query] 传递给 service.search。
+5. 添加额外的自定义搜索端点：
+   - getCategories() - 获取分类
    - getFeatured() - 获取特色产品
 
-请生成完整的控制器代码，包含辅助方法和类型定义。
+请生成完整的控制器代码，包含类型定义。
 ```
 
 ---
@@ -332,12 +312,11 @@ interface SearchResult<T> {
 ## Prompt 7: 将控制器集成到路由中
 
 ```
-请帮我创建一个完整的路由类，使用之前生成的各种控制器。要求如下：
+请帮我创建一个完整的路由类，使用 CommonController 和 CommonSearchController。要求如下：
 
 1. 创建 ProductRoutes 类继承 CommonRoutes
 2. 导入和实例化以下控制器：
-   - ProductController (TenantBaseController)
-   - ProductSearchController (TenantSearchController)
+   - ProductController (CommonController 或 CommonSearchController)
 3. 实现 isValidUser()：
    - 验证用户已登录
    - 验证用户关联到有效租户
@@ -362,40 +341,33 @@ interface SearchResult<T> {
 请帮我为一个博客系统创建完整的控制器和路由结构。要求：
 
 系统需求：
-1. 文章管理（租户级别）
+1. 文章管理与搜索（租户级别）
 2. 评论管理（租户级别）
-3. 用户管理（管理员级别）
+3. 用户管理（管理员级别，与租户无关）
 4. 标签管理（全局，管理员级别）
 
 需要创建：
 
-1. ArticleController (继承 TenantBaseController)
-   - 服务接口：ArticleService
-   - 方法：createNew, update, delete, publish, unpublish
+1. ArticleController (继承 CommonSearchController)
+   - 服务接口：ArticleService (createNew, update, del, search, publish)
    - 验证规则：title, content, tags
 
-2. ArticleSearchController (继承 TenantSearchController)
-   - 服务接口：ArticleSearchService
-   - 方法：search, byTag, byAuthor, byDateRange
-   - 支持分页和排序
-
-3. CommentController (继承 TenantBaseController)
-   - 服务接口：CommentService
-   - 方法：createNew, update, delete
+2. CommentController (继承 CommonController)
+   - 服务接口：CommentService (createNew, update, del)
    - 验证规则：articleId, content
 
-4. UserController (继承 AdminBaseController)
-   - 服务接口：UserAdminService
-   - 方法：createNew, update, delete, activate, deactivate
+3. UserController (继承 CommonController)
+   - 服务接口：UserAdminService (createNew, update, del, activate, deactivate)
+   - 覆写 getCreateNewArguments 和 getUpdateArguments 以省略 user 参数
    - 验证规则：email, name, role
 
-5. TagController (继承 AdminBaseController)
-   - 服务接口：TagService
-   - 方法：createNew, update, delete, merge
+4. TagController (继承 CommonController)
+   - 服务接口：TagService (createNew, update, del, merge)
+   - 覆写 getCreateNewArguments 和 getUpdateArguments 以省略 user 参数
    - 验证规则：name, color
 
-6. 路由类：
-   - ArticleRoutes - 集成 ArticleController 和 ArticleSearchController
+5. 路由类：
+   - ArticleRoutes - 集成 ArticleController
    - CommentRoutes - 集成 CommentController
    - AdminUserRoutes - 集成 UserController
    - AdminTagRoutes - 集成 TagController
@@ -403,7 +375,7 @@ interface SearchResult<T> {
 请生成所有控制器和路由类的完整代码，包括：
 - 服务接口定义
 - 数据类型定义
-- 验证规则
+- 验证规则（通过 getRules 声明）
 - 实现细节
 - JSDoc 注释
 ```
@@ -413,62 +385,54 @@ interface SearchResult<T> {
 ## 使用建议
 
 1. **选择合适的控制器基类**：
-   - 无需服务层的简单操作 → Controller
-   - 需要服务注入的业务逻辑 → BaseController
-   - 需要 CRUD 操作 → CommonController
-   - 租户级别操作 → TenantBaseController/TenantSearchController
-   - 管理员级别操作 → AdminBaseController/AdminSearchController
+   - 无需服务层的简单操作 → `Controller`
+   - 需要服务注入的自定义业务逻辑 → `BaseController`
+   - 需要标准 CRUD 操作与验证 → `CommonController`
+   - 需要 CRUD 操作与搜索功能 → `CommonSearchController`
 
 2. **验证规则**：
-   - 始终为数据修改操作定义验证规则
-   - 使用 @ticatec/bean-validator 提供的验证器
-   - 可以重写 buildNewEntry/buildUpdatedEntry 添加额外数据
+   - 始终通过覆写 `protected getRules(): ValidationRules` 定义校验规则
+   - 使用 `@ticatec/bean-validator` 提供的验证器
+   - 可以覆写 `buildNewEntry`/`buildUpdatedEntry` 在校验前丰富或预处理数据
 
 3. **服务接口**：
-   - 确保服务方法签名与控制器期望的匹配
-   - AdminBaseController 不需要 user 参数
-   - TenantBaseController 第一个参数是 user
+   - 默认情况下，`CommonController` 向 `createNew` 和 `update` 传递 `[loggedUser, req.body]`
+   - 对于无需 user 参数的平台管理员操作，覆写 `getCreateNewArguments` 和 `getUpdateArguments` 返回 `[req.body]`
+   - `CommonSearchController.search()` 自动向 `service.search` 传递 `[loggedUser, req.query]`
 
 4. **调试**：
-   - 设置 `BaseController.debugEnabled = true` 启用调试日志
-   - 使用 this.logger 记录重要操作
+   - 设置 `Controller.debugEnabled = true` 启用控制器调试日志
 
 ---
 
 ## Controller 层次结构快速参考
 
 ```
-Controller (基础功能)  
-├── BaseController<T> (服务注入)  
-    └── CommonController<T> (CRUD + 验证)  
-        ├── AdminBaseController<T> (管理员，无租户)  
-        │   └── AdminSearchController<T> (管理员搜索)  
-        └── TenantBaseController<T> (租户特定)  
-            └── TenantSearchController<T> (租户搜索)  
+Controller (基础功能，包含日志与用户访问)
+  └── BaseController<T> (服务注入)
+        └── CommonController<T> (CRUD + 自动校验)
+              └── CommonSearchController<T> (搜索支持)
 ```
 
-### 各控制器的服务方法签名：
+### 各控制器的默认服务方法签名：
 
-**AdminBaseController:**
-```typescript
-service.createNew(data: any): Promise<any>
-service.update(data: any): Promise<any>
-```
-
-**TenantBaseController:**
+**CommonController (默认 / 多租户):**
 ```typescript
 service.createNew(user: any, data: any): Promise<any>
 service.update(user: any, data: any): Promise<any>
+service.del(id: string): Promise<any>
 ```
 
-**AdminSearchController:**
+**CommonController (平台管理员 / 自定义参数):**
 ```typescript
-service.search(query: any, pagination: any): Promise<any>
+service.createNew(data: any): Promise<any>
+service.update(data: any): Promise<any>
+service.del(id: string): Promise<any>
 ```
 
-**TenantSearchController:**
+**CommonSearchController:**
 ```typescript
-service.search(user: any, query: any, pagination: any): Promise<any>
+service.search(user: any, query: any): Promise<any>
 ```
 
 ---

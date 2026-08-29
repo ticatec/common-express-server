@@ -68,8 +68,8 @@ export default abstract class BaseServer {
      * @returns Promise that resolves when server startup is complete
      */
     async startup() {
-        this.logger.info('Starting server...');
         await this.loadConfigFile();
+        this.logger.info('Starting server...');
         try {
             await this.beforeStart();
             const webConf = this.getWebConf();
@@ -245,7 +245,6 @@ export default abstract class BaseServer {
      */
     static startup(server: BaseServer): Promise<void> {
         return server.startup().catch(ex => {
-            server.logger.error({ ex }, 'Server startup error');
             process.exitCode = 1;
             throw ex;
         });
